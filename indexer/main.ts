@@ -39,6 +39,8 @@ const args = process.argv.slice(2);
 const OUT = args[args.indexOf('--out') + 1] && args.includes('--out') ? args[args.indexOf('--out') + 1] : './data-out';
 const BUDGET = Number(process.env.INDEXER_MAX_CALLS || 600);
 const PAGES = Number(process.env.INDEXER_POOL_PAGES || 10);
+/** quotes that get full (10-page) discovery per run; the rest get page 1 */
+const DEEP_PER_RUN = Number(process.env.INDEXER_DEEP_QUOTES_PER_RUN || 3);
 
 async function readJson<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -137,14 +139,21 @@ async function main() {
     const qref = new Map([...quotes].map(([k, v]) => [k, { symbol: v.symbol, mint: v.mint }]));
 
     // discovery: brand-new pools first, then every quote's pools by activity
-    for (let page = 1; page <= 3; page++) {
-      const res = await gt.get<GtList<GtPool>>(`/networks/${NETWORK}/new_pools?include=base_token,quote_token,dex&page=${page}`);
+    {
+      const res = await gt.get<GtList<GtPool>>(`/networks/${NETWORK}/new_pools?include=base_token,quote_token,dex&page=1`);
       for (const p of res?.data ?? []) seen.add(p.attributes.address);
       ingest(state, res, qref, now);
     }
+    // the free API is tight (~10 calls/min from CI), so deep discovery rotates:
+    // a few quotes get all pages each run, the rest just their busiest page
+    const deepSet = new Set(
+      [...quotes.values()]
+        .sort((a, b) => (state.lastDeepDiscovery[a.symbol] ?? 0) - (state.lastDeepDiscovery[b.symbol] ?? 0))
+        .slice(0, DEEP_PER_RUN)
+        .map((q) => q.symbol),
+    );
     for (const q of quotes.values()) {
-      // deep pagination every 6h per quote; otherwise just the busiest page
-      const deep = now - (state.lastDeepDiscovery[q.symbol] ?? 0) > 6 * HOUR;
+      const deep = deepSet.has(q.symbol);
       const pages = deep ? PAGES : 1;
       let found = 0;
       for (let page = 1; page <= pages; page++) {
@@ -161,7 +170,7 @@ async function main() {
     const stale = Object.values(state.pools)
       .filter((p) => !seen.has(p.address) && now - p.observedAt > HOUR && (p.vol24 ?? 0) > 0)
       .sort((a, b) => (b.vol24 ?? 0) - (a.vol24 ?? 0));
-    for (let i = 0; i < stale.length && gt.remaining > 120; i += 30) {
+    for (let i = 0; i < Math.min(stale.length, 90) && gt.remaining > 120; i += 30) {
       const ids = stale.slice(i, i + 30).map((p) => p.address);
       const res = await gt.get<GtList<GtPool>>(`/networks/${NETWORK}/pools/multi/${ids.join(',')}?include=base_token,quote_token,dex`);
       ingest(state, res, qref, now);

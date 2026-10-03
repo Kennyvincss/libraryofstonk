@@ -9,7 +9,7 @@ export class Gecko {
   private readonly deadline = Date.now() + Number(process.env.INDEXER_MAX_MINUTES || 30) * 60_000;
   constructor(
     private readonly budget: number,
-    private readonly minIntervalMs = Number(process.env.INDEXER_MIN_INTERVAL_MS || 2200),
+    private readonly minIntervalMs = Number(process.env.INDEXER_MIN_INTERVAL_MS || 6200),
     private readonly base = process.env.GECKO_API || GECKO_API,
   ) {}
 

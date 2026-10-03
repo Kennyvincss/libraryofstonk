@@ -11,6 +11,10 @@ on:
         description: 'API call budget for this run (free tier ≈ 27/min)'
         required: false
         default: '600'
+      max_minutes:
+        description: 'Stop spending API calls after this many minutes, then publish'
+        required: false
+        default: '32'
 
 permissions:
   contents: write
@@ -48,7 +52,7 @@ jobs:
       - name: Run indexer
         env:
           INDEXER_MAX_CALLS: ${{ github.event.inputs.max_calls || '600' }}
-          INDEXER_MAX_MINUTES: '32'
+          INDEXER_MAX_MINUTES: ${{ github.event.inputs.max_minutes || '32' }}
         run: npx tsx indexer/main.ts --out data-out
 
       - name: Publish to data branch
