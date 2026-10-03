@@ -186,7 +186,7 @@ export function RewindPage() {
         setPlaying((p) => !p);
       } else if (e.key === 'ArrowRight' || e.key === 'l') go(idx + 1);
       else if (e.key === 'ArrowLeft' || e.key === 'j') go(elapsed > 1500 ? idx : idx - 1);
-      else if (e.key === 'Escape') nav('/universe');
+      else if (e.key === 'Escape') nav('/archive');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -217,9 +217,9 @@ export function RewindPage() {
               🔊 Click to hear the narration
             </button>
           )}
-          <button className="btn ghost sm" onClick={() => nav('/universe')}>
-            Skip ⏭
-          </button>
+          <Link to="/archive" className="btn ghost sm">
+            Skip to the archive ⏭
+          </Link>
         </div>
       </div>
 
@@ -247,7 +247,10 @@ export function RewindPage() {
         )}
         {scene.kind === 'outro' && (
           <div className="row gap">
-            <Link to="/universe" className="btn primary">
+            <Link to="/archive" className="btn primary">
+              Enter the archive
+            </Link>
+            <Link to="/universe" className="btn outline">
               Enter the universe
             </Link>
             <button className="btn ghost" onClick={() => (go(0), setPlaying(true))}>

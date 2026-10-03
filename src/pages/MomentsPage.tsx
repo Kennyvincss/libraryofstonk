@@ -24,6 +24,8 @@ export function MomentsPage() {
     return out;
   }, [start, end]);
 
+  const first = archive.publicMoments.reduce<(typeof archive.publicMoments)[number] | undefined>((a, m) => (!a || m.start < a.start ? m : a), undefined);
+
   return (
     <div className="moments-page">
       <header className="page-head">
@@ -32,9 +34,16 @@ export function MomentsPage() {
         <p className="lede">
           A Moment is a measurable anomaly: a burst of launches around one idea, a quote asset stampede, a market that swallowed a whole day’s volume, an ecosystem-wide crash and the comeback after it.
         </p>
-        <Link to="/rewind" className="btn primary" style={{ marginTop: 18 }}>
-          ▶ Play the rewind
-        </Link>
+        <div className="row gap" style={{ marginTop: 18 }}>
+          <Link to="/" className="btn primary">
+            ▶ Play the rewind
+          </Link>
+          {first && (
+            <Link to={`/moments/${encodeURIComponent(first.id)}?play=1`} className="btn ghost">
+              ▶ Play the moments one by one
+            </Link>
+          )}
+        </div>
       </header>
 
       <div className="river" aria-label="Moments over time">

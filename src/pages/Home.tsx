@@ -48,7 +48,7 @@ export function Home() {
           </h1>
           <p className="hero-sub">Explore the markets, moments and madness of StonkFun.</p>
           <div className="hero-cta">
-            <Link to="/rewind" className="btn primary lg rewind-cta">
+            <Link to="/" className="btn primary lg rewind-cta">
               <span className="rw-cta-ico" aria-hidden>
                 ▶
               </span>

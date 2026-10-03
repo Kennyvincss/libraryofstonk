@@ -7,6 +7,7 @@ import { MarketCard } from '../components/MarketCard';
 import { fmtDate, fmtDuration, fmtMultiple, fmtNum, fmtUsd } from '../lib/format';
 import { NotFound } from './NotFound';
 import { Footer } from '../components/Footer';
+import { MomentPlayer } from '../components/MomentPlayer';
 import { ShareButton, StoryCallout, StoryImage } from '../components/Story';
 
 export function MomentPage() {
@@ -54,7 +55,7 @@ export function MomentPage() {
           <div className="mp-actions">
           <ShareButton id={mo.id} />
           {mo.status === 'approved' && (
-            <Link to={`/rewind?from=${encodeURIComponent(mo.id)}`} className="btn ghost sm">
+            <Link to={`/?from=${encodeURIComponent(mo.id)}`} className="btn ghost sm">
               ▶ Play the rewind from here
             </Link>
           )}
@@ -167,6 +168,7 @@ export function MomentPage() {
         </section>
       )}
       <Footer />
+      <MomentPlayer mo={mo} order={pub} />
     </div>
   );
 }

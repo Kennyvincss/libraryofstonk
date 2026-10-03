@@ -33,7 +33,8 @@ export function App() {
         <>
           <main className="page" key={loc.pathname}>
             <Routes location={loc}>
-              <Route path="/" element={<Home />} />
+              <Route path="/" element={<RewindPage />} />
+              <Route path="/archive" element={<Home />} />
               <Route path="/universe" element={<UniversePage />} />
               <Route path="/moments" element={<MomentsPage />} />
               <Route path="/moments/:id" element={<MomentPage />} />

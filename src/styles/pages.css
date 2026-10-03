@@ -1916,3 +1916,43 @@
   color: var(--acid);
   border-color: color-mix(in srgb, var(--acid) 40%, transparent);
 }
+
+/* moment page player — same controls as the rewind, docked to the viewport */
+.rw-player.mo-player {
+  position: fixed;
+  bottom: 16px;
+}
+.moment-page {
+  padding-bottom: 110px;
+}
+.mo-progress {
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.mo-progress i {
+  display: block;
+  height: 100%;
+  background: var(--acid);
+  box-shadow: 0 0 10px var(--acid);
+}
+.mo-player-rewind {
+  margin-left: auto;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+}
+.mo-player-rewind:hover {
+  color: var(--acid);
+}
+.mo-player .rw-date {
+  margin-left: 14px;
+}
+@media (max-width: 640px) {
+  .mo-player-rewind {
+    display: none;
+  }
+}
