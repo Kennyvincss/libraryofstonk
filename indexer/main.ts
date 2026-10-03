@@ -20,7 +20,8 @@ import { join } from 'node:path';
 import { BudgetExhausted, Gecko, log } from './client';
 import { buildArchive, groupByMint, type Tracked } from './build';
 import { fetchPlatformVolume, type PlatformVolume } from './llama';
-import { creationTime, discoverLauncher, launchesPerDay, enumeratePools, heliusCalls, heliusEnabled, learnLayouts, pool as mapLimit, tokenMetadata, type ChainPool, type ProgramLayout, type TokenMeta } from './helius';
+import { classify, enumerateStockPools, fromRows, learnClmmLayout, legacyCounts, toRows, type LegacyCache, type LegacyRow } from './legacy';
+import { creationTime, enumeratePools, heliusCalls, heliusEnabled, learnLayouts, pool as mapLimit, tokenMetadata, type ChainPool, type ProgramLayout, type TokenMeta } from './helius';
 import { NETWORK, num, parseOhlcv, poolToRecord, tokenMap, type GtList, type GtPool, type GtToken, type Ohlcv, type PoolRecord, type QuoteRef } from '../src/data/live/gecko';
 import { CRYPTO_QUOTE_SPECS, EXCLUDED_MINTS, QUOTE_SPECS, specToQuote } from '../src/data/live/quotes';
 import { STONKFUN, stonkFunMints } from '../src/data/live/stonkfun';
@@ -49,8 +50,10 @@ interface State {
     meta: Record<string, TokenMeta>;
     stats: Record<string, { priceUsd?: number; vol24?: number; mcapUsd?: number; fdvUsd?: number; reserveUsd?: number; observedAt: number }>;
     enumeratedAt?: number;
-    /** pre-LaunchLab era: launches counted from StonkFun's launcher wallet */
-    legacy?: { wallet?: string; byDay: Record<string, number>; total: number; countedAt: number };
+    /** pre-LaunchLab era: launches per day (from legacyCache) */
+    legacy?: { byDay: Record<string, number>; total: number; countedAt: number; complete?: boolean };
+    /** pre-LaunchLab CLMM pools (kept in cache/legacy-pools.json) */
+    legacyCache?: LegacyCache;
   };
 }
 
@@ -199,22 +202,11 @@ async function chainPhase(state: State, gt: Gecko, stocks: Map<string, QuoteRef 
   chain.enumeratedAt = now;
   log(`helius: ${found.length} StonkFun pools on-chain (${Object.keys(chain.pools).length} known)`);
 
-  // pre-LaunchLab era (Aug 3 – Sept 4): find the launcher wallet once, recount daily (history is fixed)
-  if (!chain.legacy || now - chain.legacy.countedAt > DAY) {
-    try {
-      const early = Object.values(state.pools)
-        .filter((p) => p.dexId === 'raydium-clmm' && stockMints.has(p.quoteMint) && p.createdAt >= STONKFUN.launch - DAY && p.createdAt < STONKFUN.launchlab - DAY)
-        .sort((a, b) => (b.vol24 ?? 0) - (a.vol24 ?? 0))
-        .map((p) => p.address);
-      const wallet = chain.legacy?.wallet ?? (await discoverLauncher(early))?.wallet;
-      if (wallet) {
-        const counted = await launchesPerDay(wallet, STONKFUN.launch, STONKFUN.launchlab - DAY);
-        chain.legacy = { wallet, ...counted, countedAt: now };
-        log(`helius: ${counted.total} launcher-wallet transactions Aug 3 – Sept 4`);
-      } else log(`helius: pre-LaunchLab launches not counted (${early.length} early pools known)`);
-    } catch (e) {
-      log(`helius: legacy count failed: ${(e as Error).message}`);
-    }
+  // pre-LaunchLab era (Aug 3 – Sept 5): one-transaction CLMM launches against a stock
+  try {
+    await legacyPhase(state, stockMints, now);
+  } catch (e) {
+    log(`legacy: failed: ${(e as Error).message}`);
   }
 
   // creation times for new pools
@@ -239,7 +231,8 @@ async function chainPhase(state: State, gt: Gecko, stocks: Map<string, QuoteRef 
 
   // token metadata (names, symbols, images)
   const tokenOf = (p: ChainPool) => (stockMints.has(p.baseMint) || CRYPTO.quotes.has(p.baseMint) ? p.quoteMint : p.baseMint);
-  const needMeta = [...new Set(Object.values(chain.pools).map(tokenOf))].filter((m) => !chain.meta[m]).slice(0, 20_000);
+  const legacyTokens = Object.values(chain.legacyCache?.pools ?? {}).filter((p) => p.launch === 1).map((p) => p.token);
+  const needMeta = [...new Set([...legacyTokens, ...Object.values(chain.pools).map(tokenOf)])].filter((m) => !chain.meta[m]).slice(0, 20_000);
   if (needMeta.length) {
     const meta = await tokenMetadata(needMeta);
     for (const m of needMeta) chain.meta[m] = meta.get(m) ?? {};
@@ -247,12 +240,86 @@ async function chainPhase(state: State, gt: Gecko, stocks: Map<string, QuoteRef 
   }
 }
 
+const LEGACY_MINUTES = Number(process.env.INDEXER_LEGACY_MINUTES || 8);
+
+async function legacyPhase(state: State, stockMints: Set<string>, now: number) {
+  const chain = state.chain!;
+  const cache = (chain.legacyCache ??= { pools: {} });
+  if (!cache.layout) {
+    const samples = Object.values(state.pools)
+      .filter((p) => p.dexId === 'raydium-clmm' && stockMints.has(p.quoteMint))
+      .map((p) => ({ address: p.address, mint: p.mint, quoteMint: p.quoteMint }));
+    cache.layout = await learnClmmLayout(samples);
+    if (!cache.layout) {
+      log(`legacy: could not learn the CLMM pool layout (${samples.length} samples)`);
+      return;
+    }
+  }
+  // the set of pools is fixed for the era; re-enumerate weekly to catch anything missed
+  if (!cache.enumeratedAt || now - cache.enumeratedAt > 7 * DAY) {
+    const notCoins = new Set([...EXCLUDED_MINTS, ...CRYPTO.quotes.keys()]);
+    const found = await enumerateStockPools(cache.layout, stockMints, notCoins);
+    for (const p of found) cache.pools[p.address] ??= p;
+    cache.enumeratedAt = now;
+    log(`legacy: ${found.length} stock-quoted CLMM pools on-chain`);
+  }
+  await classify(cache, STONKFUN.launch, STONKFUN.launchlab, LEGACY_MINUTES);
+  const c = legacyCounts(cache, STONKFUN.launch, STONKFUN.launchlab);
+  chain.legacy = { byDay: c.byDay, total: c.total, countedAt: now, complete: c.pending === 0 && c.total > 0 };
+  log(
+    `legacy: ${c.total} launches Aug 3 – Sept 5 (one-transaction mint + CLMM pool)` +
+      (c.pending ? `, ${c.pending} pools still to check` : '') +
+      (c.topSigners.length ? ` · top signers ${c.topSigners.map(([w, n]) => `${w.slice(0, 6)}…×${n}`).join(', ')}` : ''),
+  );
+}
+
+/** Legacy launches as pool records (GeckoTerminal's own record wins when it has one). */
+function legacyRecords(state: State, stocks: Map<string, QuoteRef>, now: number): PoolRecord[] {
+  const chain = state.chain;
+  const cache = chain?.legacyCache;
+  if (!cache) return [];
+  const out: PoolRecord[] = [];
+  for (const p of Object.values(cache.pools)) {
+    if (p.launch !== 1 || !p.createdAt) continue;
+    const q = stocks.get(p.quoteMint);
+    if (!q) continue;
+    const gt = state.pools[p.address];
+    if (gt) {
+      out.push({ ...gt, dexId: 'stonkfun-legacy' });
+      continue;
+    }
+    const meta = chain!.meta[p.token] ?? {};
+    const st = chain!.stats[p.token];
+    const symbol = (meta.symbol || p.token.slice(0, 5)).replace(/^\$/, '');
+    out.push({
+      address: p.address,
+      dexId: 'stonkfun-legacy',
+      createdAt: p.createdAt,
+      mint: p.token,
+      symbol,
+      name: meta.name || symbol,
+      image: meta.image,
+      quote: q.symbol,
+      quoteMint: p.quoteMint,
+      swapped: false,
+      priceUsd: st?.priceUsd,
+      fdvUsd: st?.fdvUsd,
+      mcapUsd: st?.mcapUsd,
+      reserveUsd: st?.reserveUsd,
+      vol24: st?.vol24,
+      observedAt: st?.observedAt ?? now,
+    });
+  }
+  return out;
+}
+
 /** Token stats for chain-only markets from GeckoTerminal (30 tokens per call). */
 async function chainStats(gt: Gecko, state: State, now: number, maxCalls: number) {
   const chain = state.chain;
   if (!chain) return;
   const known = new Set(Object.values(state.pools).map((p) => p.mint));
-  const mints = [...new Set(Object.values(chain.pools).map((p) => p.baseMint))].filter((m) => !known.has(m) && chain.meta[m] !== undefined);
+  const legacyTokens = Object.values(chain.legacyCache?.pools ?? {}).filter((p) => p.launch === 1).map((p) => p.token);
+  const mints = [...new Set([...legacyTokens, ...Object.values(chain.pools).map((p) => p.baseMint)])].filter((m) => !known.has(m) && chain.meta[m] !== undefined);
   mints.sort((a, b) => (chain.stats[a]?.observedAt ?? 0) - (chain.stats[b]?.observedAt ?? 0));
   let calls = 0;
   for (let i = 0; i < mints.length && calls < maxCalls; i += 30) {
@@ -274,6 +341,13 @@ async function chainStats(gt: Gecko, state: State, now: number, maxCalls: number
     }
   }
   if (calls) log(`stats: refreshed ${Math.min(mints.length, calls * 30)} chain-only tokens`);
+}
+
+/** Every pool record: GeckoTerminal's, chain-only ones and pre-LaunchLab launches. */
+function allRecords(state: State, stocks: Map<string, QuoteRef>, now: number): PoolRecord[] {
+  const legacy = legacyRecords(state, stocks, now);
+  const legacyAddr = new Set(legacy.map((r) => r.address));
+  return [...Object.values(state.pools).filter((p) => !legacyAddr.has(p.address)), ...chainRecords(state, stocks, now), ...legacy];
 }
 
 /** Pool records for on-chain pools GeckoTerminal never listed. */
@@ -323,6 +397,8 @@ async function loadChain(state: State) {
   if (meta) state.chain.meta = Object.fromEntries(Object.entries(meta).map(([m, [n, sy, im]]) => [m, { name: n || undefined, symbol: sy || undefined, image: im || undefined }]));
   const stats = await readJson<State['chain'] extends infer C ? (C extends { stats: infer S } ? S : never) : never>(join(OUT, 'cache', 'chain-stats.json'), {} as never);
   if (stats) state.chain.stats = stats;
+  const legacy = await readJson<{ layout?: LegacyCache['layout']; enumeratedAt?: number; rows: LegacyRow[] } | null>(join(OUT, 'cache', 'legacy-pools.json'), null);
+  if (legacy) state.chain.legacyCache = { layout: legacy.layout, enumeratedAt: legacy.enumeratedAt, pools: fromRows(legacy.rows) };
 }
 async function saveChain(state: State) {
   const c = state.chain;
@@ -331,6 +407,7 @@ async function saveChain(state: State) {
   await writeJson(join(OUT, 'cache', 'chain-pools.json'), rows);
   await writeJson(join(OUT, 'cache', 'chain-meta.json'), Object.fromEntries(Object.entries(c.meta).map(([m, v]) => [m, [v.name ?? '', v.symbol ?? '', v.image ?? '']])));
   await writeJson(join(OUT, 'cache', 'chain-stats.json'), c.stats);
+  if (c.legacyCache) await writeJson(join(OUT, 'cache', 'legacy-pools.json'), { layout: c.legacyCache.layout, enumeratedAt: c.legacyCache.enumeratedAt, rows: toRows(c.legacyCache) });
 }
 
 async function main() {
@@ -421,7 +498,7 @@ async function main() {
     // history: new markets get full daily OHLCV, active ones a short top-up
     // one history per StonkFun token: its primary pool
     const stockSet = new Set(QUOTE_SPECS.map((s) => s.symbol));
-    const all = [...Object.values(state.pools), ...chainRecords(state, qref, now)];
+    const all = allRecords(state, qref, now);
     const sf = stonkFunMints(all, stockSet);
     const pools = groupByMint(all.filter((p) => sf.has(p.mint))).map((g) => g.primary);
     const queue = [
@@ -453,7 +530,7 @@ async function main() {
 
   // build outputs
   const qrefAll = new Map(Object.entries(state.quotes).filter(([, v]) => v.mint).map(([sym, v]) => [v.mint, { symbol: sym, mint: v.mint }]));
-  const records = [...Object.values(state.pools), ...chainRecords(state, qrefAll, now)];
+  const records = allRecords(state, qrefAll, now);
   const bars = new Map<string, Ohlcv[]>();
   for (const r of records) {
     const f = join(OUT, 'v1', 'bars', `${r.address}.json`);
@@ -472,6 +549,7 @@ async function main() {
         datedPools: dated.length,
         // exact launches per UTC day from on-chain creation times
         legacyTotal: state.chain!.legacy?.total ?? 0,
+        legacyComplete: state.chain!.legacy?.complete ?? false,
         createdByDay: dated.reduce<Record<string, number>>((acc, p) => {
           const d = String(Math.floor(p.createdAt! / DAY) * DAY);
           acc[d] = (acc[d] ?? 0) + 1;
@@ -490,7 +568,7 @@ async function main() {
   await writeJson(join(OUT, 'v1', 'ecosystem.json'), built.ecosystem);
   await writeJson(join(OUT, 'v1', 'activity.json'), built.activity);
   await saveChain(state);
-  await writeJson(join(OUT, 'cache', 'state.json'), { ...state, chain: state.chain ? { ...state.chain, pools: {}, meta: {}, stats: {} } : undefined });
+  await writeJson(join(OUT, 'cache', 'state.json'), { ...state, chain: state.chain ? { ...state.chain, pools: {}, meta: {}, stats: {}, legacyCache: undefined } : undefined });
   log(`helius calls this run: ${heliusCalls()}`);
   log(`done · ${built.markets.length} markets · ${bars.size} with history · ${gt.calls} API calls`);
 }

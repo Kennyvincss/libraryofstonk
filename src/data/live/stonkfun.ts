@@ -15,7 +15,8 @@ export const STONKFUN = {
   launch: Date.UTC(2026, 7, 3),
   /** new deployments moved to Raydium LaunchLab */
   launchlab: Date.UTC(2026, 8, 6),
-  dexIds: ['stonkfun'],
+  /** `stonkfun-legacy`: Aug 3 – Sept 5 launches (one-transaction mint + Raydium CLMM pool), found on-chain by the indexer */
+  dexIds: ['stonkfun', 'stonkfun-legacy'],
   launchlabDexIds: ['raydium-launchlab'],
   platformTokenSymbol: 'STONK',
 } as const;
@@ -23,7 +24,7 @@ export const STONKFUN = {
 const DAY = 86_400_000;
 
 export function isStonkFunPool(p: PoolRecord, stockQuotes: Set<string>): boolean {
-  if (STONKFUN.dexIds.includes(p.dexId as 'stonkfun')) return true;
+  if ((STONKFUN.dexIds as readonly string[]).includes(p.dexId ?? '')) return true;
   if (STONKFUN.launchlabDexIds.includes(p.dexId as 'raydium-launchlab') && stockQuotes.has(p.quote) && p.createdAt >= STONKFUN.launchlab - DAY) return true;
   // the platform token itself
   if (p.symbol.toUpperCase() === STONKFUN.platformTokenSymbol && stockQuotes.has(p.quote) && p.createdAt >= STONKFUN.stonkDeployed - DAY) return true;
