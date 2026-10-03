@@ -187,7 +187,10 @@ async function chainPhase(state: State, stocks: Map<string, QuoteRef & { priceUs
   // creation times for new pools
   const missing = Object.values(chain.pools).filter((p) => !p.createdAt).slice(0, CHAIN_NEW_PER_RUN);
   let done = 0;
+  // creation-time backfill gets at most 40% of the run; the rest continues next run
+  const stopAt = Date.now() + Number(process.env.INDEXER_MAX_MINUTES || 30) * 60_000 * 0.4;
   await mapLimit(missing, 6, async (p) => {
+    if (Date.now() > stopAt) return;
     try {
       p.createdAt = await creationTime(p.address);
     } catch (e) {
@@ -195,6 +198,7 @@ async function chainPhase(state: State, stocks: Map<string, QuoteRef & { priceUs
     }
     if (++done % 500 === 0) log(`helius: creation times ${done}/${missing.length}`);
   });
+  log(`helius: creation times found for ${done} of ${missing.length} new pools this run`);
 
   // token metadata (names, symbols, images)
   const tokenOf = (p: ChainPool) => (stockMints.has(p.baseMint) || CRYPTO.quotes.has(p.baseMint) ? p.quoteMint : p.baseMint);

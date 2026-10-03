@@ -62,7 +62,12 @@ async function rpc<T>(method: string, params: unknown): Promise<T> {
   for (let attempt = 0; attempt < 5; attempt++) {
     calls++;
     try {
-      const res = await fetch(RPC(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
+      const res = await fetch(RPC(), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+        signal: AbortSignal.timeout(method === 'getProgramAccounts' ? 180_000 : 30_000),
+      });
       if (res.status === 429 || res.status >= 500) {
         await sleep(1000 * 2 ** attempt);
         continue;
