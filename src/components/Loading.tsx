@@ -11,7 +11,15 @@ export function Loading({ progress, error }: { progress: string; error?: string 
         <>
           <h2>The archive is unreachable</h2>
           <p className="muted">{error}</p>
-          <p className="muted small">Check VITE_DATA_SOURCE / VITE_ARCHIVE_API_URL, or run with VITE_DATA_SOURCE=demo.</p>
+          <p className="muted small">The real-data archive is built hourly by the indexer. If it hasn’t published yet, the simulated demo is still explorable.</p>
+          <div className="row gap" style={{ justifyContent: 'center' }}>
+            <a className="btn primary" href="?source=demo">
+              View the demo instead
+            </a>
+            <a className="btn ghost" href="?source=live">
+              Retry live data
+            </a>
+          </div>
         </>
       ) : (
         <p className="loading-text">{progress}</p>

@@ -4,7 +4,7 @@
 
 An interactive digital museum for the StonkFun ecosystem. It is not another token table. Every market is a star, every quote asset is a galaxy, and narratives form clusters you can see lining up across galaxies. You can travel through time, fall into moments, roll the dice, and follow connections from one market to the next.
 
-> ⚠️ **Out of the box this runs on simulated demo data**, and the UI says so everywhere: a `DEMO DATA` chip, `SIMULATED` tags on the live feed, and a note in the footer and on the About page. Point it at a real indexer with `VITE_DATA_SOURCE=api` (see [`docs/DATA_ARCHITECTURE.md`](docs/DATA_ARCHITECTURE.md)).
+> **Real data by default.** An indexer (`indexer/`, run hourly by `.github/workflows/indexer.yml`) finds every Solana pool where a token trades against a tokenized stock (NVDAx, SPYx, TSLAx…), which is how StonkFun markets are quoted, and publishes the archive to this repo's `data` branch. The site reads that dataset and calls [GeckoTerminal](https://www.geckoterminal.com/dex-api) live for hourly charts, trades and the live feed. The simulated demo is still there at `?source=demo`, and it is labelled as such.
 
 ## Quick start
 
@@ -15,13 +15,14 @@ npm test           # engine tests
 npm run build      # typecheck + production build
 ```
 
-To use real data:
+Run the indexer yourself (needs internet access to api.geckoterminal.com):
 
 ```bash
-cp .env.example .env
-# VITE_DATA_SOURCE=api
-# VITE_ARCHIVE_API_URL=https://your-indexer/v1
+npx tsx indexer/main.ts --out ./data-out        # incremental; re-run to extend history
+VITE_ARCHIVE_DATA_URL=http://localhost:8080/v1 npm run dev   # serve data-out/ on :8080
 ```
+
+In GitHub, **Actions → Archive indexer → Run workflow** builds and publishes the dataset on demand. After that the schedule keeps it fresh every hour.
 
 ## What's inside
 

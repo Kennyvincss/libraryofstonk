@@ -5,7 +5,7 @@ import { BADGES, type BadgeId } from '../engine/badges';
 import { momentRules, notabilityWeights } from '../engine/config';
 import { MOMENT_KIND } from '../components/MomentCard';
 import { Footer } from '../components/Footer';
-import { fmtDate, fmtNum } from '../lib/format';
+import { fmtAgo, fmtDate, fmtNum } from '../lib/format';
 
 export function AboutPage() {
   const { archive } = useArchive();
@@ -58,7 +58,22 @@ export function AboutPage() {
               <b>Every number you see right now is simulated.</b> No indexer is connected, so the archive runs on a deterministic simulation of a StonkFun-like ecosystem (adoption curve, attention shocks, two market-wide drawdowns, per-market lifecycles). Tickers, addresses, prices and the live feed are synthetic and labelled as such. The moments, badges and legends are <i>not</i> hand-written: the engine detects them from the simulated time series exactly as it will from chain data.
             </p>
           ) : (
-            <p>Markets, prices, volumes and traders come from the configured StonkFun indexer. Moments are detected by the engine and approved by curators before appearing publicly.</p>
+            <>
+              <p>
+                <b>Real on-chain data.</b>
+                {meta.generatedAt ? ` Archive rebuilt ${fmtAgo(meta.generatedAt)}; charts, trades and the live feed are fetched live.` : ''} Moments, legends and badges are detected by the engine from this data.
+              </p>
+              {meta.method && (
+                <ul className="method">
+                  {meta.method.map((m) => (
+                    <li key={m}>{m}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="muted small">
+                Prefer the sandbox? <a href="?source=demo">View the simulated demo</a>.
+              </p>
+            </>
           )}
           <p className="muted small">
             Connect real data by setting <code>VITE_DATA_SOURCE=api</code> and <code>VITE_ARCHIVE_API_URL</code>. The REST contract lives in <code>docs/DATA_ARCHITECTURE.md</code>.

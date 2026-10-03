@@ -28,10 +28,22 @@ The archive UI never talks to a blockchain, an RPC node or a third-party API dir
 
 | `VITE_DATA_SOURCE` | Source | What you see |
 |---|---|---|
-| `demo` (default) | `DemoSource` — deterministic simulation in a Web Worker | Clearly labelled **DEMO DATA**. `meta.isDemo = true`, live events carry `simulated: true`. |
+| `live` (default) | `LiveSource`: the static dataset from `indexer/` (published on the `data` branch), plus GeckoTerminal from the browser | Real on-chain data. |
+| `demo` | `DemoSource` — deterministic simulation in a Web Worker | Clearly labelled **DEMO DATA**. `meta.isDemo = true`, live events carry `simulated: true`. |
 | `api` | `HttpSource` → `VITE_ARCHIVE_API_URL` | Real indexed data. The demo labels go away unless the API itself sets `isDemo: true`. |
 
 All variables are listed in `.env.example`.
+
+## Live mode: how the real data is built
+
+1. **Quote assets.** `src/data/live/quotes.ts` lists the tokenized stocks to track. The indexer verifies each mint with GeckoTerminal; if a mint is missing or doesn't match, it resolves the symbol by search (preferring xStocks' `Xs…` mints, then the most liquid token).
+2. **Markets.** For every quote asset, it pages through `/networks/solana/tokens/{mint}/pools`, and checks `/new_pools` on every run. A pool counts as a market when exactly one side is a tracked stock and the other side isn't SOL, USDC or USDT.
+3. **History.** Each market gets its full daily OHLCV once (`/pools/{pool}/ohlcv/day?token={mint}`). Active markets get a short top-up every 6 hours. The files are kept in `v1/bars/`, so every run only fetches what's new.
+4. **Counts.** GeckoTerminal only exposes rolling-24h buyers, sellers and transactions. The indexer records the highest value it sees each UTC day, and lifetime traders/trades are the sum of those daily values. **History before the first indexer run therefore has volume and price but no trader counts.** The About page says this to visitors.
+5. **Budget.** The free API allows about 30 calls a minute, so each run is capped by `INDEXER_MAX_CALLS` (default 600, about 23 minutes). Whatever isn't fetched in one run is picked up by the next.
+6. **Output.** `v1/meta.json`, `markets.json` (ranked by the same notability engine the site uses), `ecosystem.json`, `activity.json` (daily volume per market, used for time travel) and `bars/<pool>.json`, force-pushed as a single commit to the `data` branch.
+
+In the browser, `LiveSource` reads that dataset. Market pages splice GeckoTerminal's hourly candles over the daily history and show the latest trades. The live feed polls `/new_pools` (new launches) and `/pools/multi` for the 30 busiest markets (volume and trader milestones, new all-time highs, sudden volume jumps). All of these events are real: `simulated: false`.
 
 ## Domain model
 

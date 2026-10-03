@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BADGES, type BadgeAward } from '../engine/badges';
 import type { VisualKind } from '../engine/archive';
@@ -63,6 +63,14 @@ export function Pair({ m, link = true }: { m: Market; link?: boolean }) {
 
 /** A deterministic sigil for a token — no images required. */
 export function Sigil({ m, size = 44 }: { m: Market; size?: number }) {
+  const [broken, setBroken] = useState(false);
+  if (m.image && !broken) {
+    return <img className="sigil sigil-img" src={m.image} width={size} height={size} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} />;
+  }
+  return <GenSigil m={m} size={size} />;
+}
+
+function GenSigil({ m, size }: { m: Market; size: number }) {
   const { archive } = useArchiveState();
   const q = archive?.quotes.get(m.quote);
   const hue = q?.hue ?? 260;

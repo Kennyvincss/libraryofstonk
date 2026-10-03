@@ -205,6 +205,10 @@ export interface SourceMeta {
   /** Total markets the source knows about (may exceed what is loaded) */
   totalMarkets: number;
   quoteAssets: QuoteAsset[];
+  /** when the dataset was built (real-data sources) */
+  generatedAt?: number;
+  /** plain-language notes on how numbers are derived */
+  method?: string[];
 }
 
 /** Progressive loading tiers for the universe. */

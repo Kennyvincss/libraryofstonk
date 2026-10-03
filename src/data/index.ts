@@ -2,6 +2,7 @@ import { config } from '../lib/env';
 import type { DataSource } from './source';
 import { DemoSource } from './demo/DemoSource';
 import { HttpSource } from './http/HttpSource';
+import { LiveSource } from './live/LiveSource';
 
 let instance: DataSource | undefined;
 
@@ -9,9 +10,11 @@ let instance: DataSource | undefined;
 export function getDataSource(): DataSource {
   if (instance) return instance;
   instance =
-    config.dataSource === 'api'
-      ? new HttpSource({ baseUrl: config.apiUrl, liveUrl: config.liveUrl, pollMs: config.livePollMs })
-      : new DemoSource(config.archiveStart);
+    config.dataSource === 'live'
+      ? new LiveSource({ dataUrl: config.dataUrl, geckoApi: config.geckoApi })
+      : config.dataSource === 'api'
+        ? new HttpSource({ baseUrl: config.apiUrl, liveUrl: config.liveUrl, pollMs: config.livePollMs })
+        : new DemoSource(config.archiveStart);
   return instance;
 }
 

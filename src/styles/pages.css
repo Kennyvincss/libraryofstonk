@@ -1819,3 +1819,11 @@
     bottom: 120px;
   }
 }
+.method {
+  margin: 8px 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  display: grid;
+  gap: 6px;
+}

@@ -8,8 +8,31 @@ function parseDate(v: string | undefined, fallback: string): number {
   return Number.isFinite(t) ? t : Date.parse(fallback);
 }
 
+type SourceKind = 'live' | 'api' | 'demo';
+
+/** ?source=demo|live in the URL overrides the build setting (remembered per tab). */
+function pickSource(): SourceKind {
+  const valid = (v: string | null | undefined): v is SourceKind => v === 'live' || v === 'api' || v === 'demo';
+  try {
+    const q = new URLSearchParams(window.location.search).get('source');
+    if (valid(q)) {
+      sessionStorage.setItem('sfa.source', q);
+      return q;
+    }
+    const s = sessionStorage.getItem('sfa.source');
+    if (valid(s)) return s;
+  } catch {
+    /* no window / storage */
+  }
+  const e = env.VITE_DATA_SOURCE as string | undefined;
+  return valid(e) ? e : 'live';
+}
+
 export const config = {
-  dataSource: (env.VITE_DATA_SOURCE as string | undefined) === 'api' ? 'api' : 'demo',
+  dataSource: pickSource(),
+  /** where the indexer publishes the dataset (the repo's `data` branch by default) */
+  dataUrl: ((env.VITE_ARCHIVE_DATA_URL as string | undefined) || 'https://raw.githubusercontent.com/Kennyvincss/libraryofstonk/data/v1').replace(/\/$/, ''),
+  geckoApi: ((env.VITE_GECKO_API as string | undefined) || 'https://api.geckoterminal.com/api/v2').replace(/\/$/, ''),
   apiUrl: ((env.VITE_ARCHIVE_API_URL as string | undefined) || '').replace(/\/$/, ''),
   liveUrl: (env.VITE_ARCHIVE_LIVE_URL as string | undefined) || '',
   livePollMs: Number(env.VITE_ARCHIVE_LIVE_POLL_MS) || 8000,

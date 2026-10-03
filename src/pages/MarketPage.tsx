@@ -122,11 +122,14 @@ export function MarketPage() {
             </span>
           ) : (
             <>
-              <a className="btn ghost sm" href={`${config.explorerUrl}/token/${m.mint}`} target="_blank" rel="noreferrer">
-                Explorer ↗
+              <a className="btn ghost sm" href={`https://www.geckoterminal.com/solana/pools/${m.id}`} target="_blank" rel="noreferrer">
+                GeckoTerminal ↗
               </a>
-              <a className="btn primary sm" href={`${config.appUrl}/token/${m.mint}`} target="_blank" rel="noreferrer">
-                Trade on StonkFun ↗
+              <a className="btn ghost sm" href={`${config.explorerUrl}/token/${m.mint}`} target="_blank" rel="noreferrer">
+                Solscan ↗
+              </a>
+              <a className="btn primary sm" href={config.appUrl} target="_blank" rel="noreferrer">
+                StonkFun ↗
               </a>
             </>
           )}
@@ -136,7 +139,7 @@ export function MarketPage() {
       <section className="mk-stats">
         <Stat k="Current price" v={fmtPrice(m.priceUsd)} sub={fmtQuotePrice(m.priceQuote, m.quote)} accent />
         <Stat k="24h change" v={<Change v={m.change24h} />} />
-        <Stat k="Market cap" v={fmtUsd(m.marketCapUsd)} sub={`ATH ${fmtUsd(m.athPriceUsd * 1e9)}`} />
+        <Stat k="Market cap" v={fmtUsd(m.marketCapUsd)} sub={`ATH ${fmtUsd(m.athPriceUsd * (m.priceUsd > 0 && m.marketCapUsd > 0 ? m.marketCapUsd / m.priceUsd : 1e9))}`} />
         <Stat k="Liquidity" v={fmtUsd(m.liquidityUsd)} />
         <Stat k="Volume" v={fmtUsd(m.volumeLifetimeUsd)} sub={`${fmtUsd(m.volume24hUsd)} in 24h`} />
         <Stat k="Traders" v={fmtNum(m.traders)} sub={m.holders ? `${fmtNum(m.holders)} holders` : undefined} />

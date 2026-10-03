@@ -28,6 +28,10 @@ export function buildStory(m: Market, bars: Bar[], now = Date.now()): Chapter[] 
   if (bars.length === 0) return [];
   const ch: Chapter[] = [];
   const launch = bars[0].o;
+  // circulating supply implied by the current market cap (1B is the launchpad default)
+  const supply = m.priceUsd > 0 && m.marketCapUsd > 0 ? m.marketCapUsd / m.priceUsd : 1e9;
+  // real-data sources may only provide volume, not per-trade counts
+  const hasCounts = bars.some((b) => b.n > 0 || b.newTraders > 0);
 
   ch.push({
     id: 'born',
@@ -36,7 +40,7 @@ export function buildStory(m: Market, bars: Bar[], now = Date.now()): Chapter[] 
     headline: `$${m.ticker} appeared on StonkFun, paired against ${m.quote}.`,
     facts: [
       { k: 'Launch price', v: fmtPrice(launch) },
-      { k: 'Launch market cap', v: fmtUsd(m.launchPriceUsd * 1e9) },
+      { k: 'Launch market cap', v: fmtUsd(m.launchPriceUsd * supply) },
     ],
     range: [0, 0],
     tone: 'neutral',
@@ -59,9 +63,9 @@ export function buildStory(m: Market, bars: Bar[], now = Date.now()): Chapter[] 
     id: 'early',
     label: 'EARLY ACTIVITY',
     t: bars[Math.min(ei - 1, bars.length - 1)].t,
-    headline: ev > 0 ? `The first six hours: ${fmtNum(et)} wallets showed up and moved ${fmtUsd(ev)}.` : 'A quiet start — almost nobody noticed.',
+    headline: ev <= 0 ? 'A quiet start — almost nobody noticed.' : hasCounts ? `The first six hours: ${fmtNum(et)} wallets showed up and moved ${fmtUsd(ev)}.` : `Its first trading window moved ${fmtUsd(ev)}.`,
     facts: [
-      { k: 'Trades', v: fmtNum(en) },
+      hasCounts ? { k: 'Trades', v: fmtNum(en) } : { k: 'Volume', v: fmtUsd(ev) },
       { k: 'Price vs launch', v: fmtPct(earlyClose / launch - 1, 0) },
     ],
     range: [0, ei - 1],
@@ -99,7 +103,7 @@ export function buildStory(m: Market, bars: Bar[], now = Date.now()): Chapter[] 
         headline: `It went ${fmtMultiple(gain)} in ${fmtDuration(span)}. ${fmtUsd(vol)} changed hands.`,
         facts: [
           { k: 'Move', v: fmtPct(gain - 1, 0) },
-          { k: 'New traders', v: fmtNum(bars.slice(a, b + 1).reduce((s, x) => s + x.newTraders, 0)) },
+          hasCounts ? { k: 'New traders', v: fmtNum(bars.slice(a, b + 1).reduce((s, x) => s + x.newTraders, 0)) } : { k: 'Volume', v: fmtUsd(vol) },
         ],
         range: [a, b],
         tone: 'up',
@@ -113,7 +117,7 @@ export function buildStory(m: Market, bars: Bar[], now = Date.now()): Chapter[] 
     t: bars[ai].t,
     headline: `All-time high at ${fmtPrice(ath)} — ${fmtMultiple(mult)} its launch price, ${fmtDuration(Math.max(HOUR, bars[ai].t - m.createdAt))} after birth.`,
     facts: [
-      { k: 'Peak market cap', v: fmtUsd(ath * 1e9) },
+      { k: 'Peak market cap', v: fmtUsd(ath * supply) },
       { k: 'Peak move', v: fmtPct(mult - 1, 0) },
     ],
     range: [ai, ai],

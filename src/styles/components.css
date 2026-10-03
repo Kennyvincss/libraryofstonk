@@ -1508,3 +1508,9 @@ a.pair:hover .pair-quote {
     display: none;
   }
 }
+.sigil-img {
+  border-radius: 50%;
+  object-fit: cover;
+  background: #110e24;
+  border: 1px solid var(--line-2);
+}
