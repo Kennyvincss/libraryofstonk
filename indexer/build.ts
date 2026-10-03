@@ -165,7 +165,7 @@ export interface Platform {
   totalAllTime?: number;
 }
 
-export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number, platform?: Platform | null): BuiltArchive {
+export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number, platform?: Platform | null, complete = false): BuiltArchive {
   // StonkFun markets only: tokens with a StonkFun (or post-switch LaunchLab) pool
   const stockSet = new Set(quotes.filter((q) => q.kind !== 'crypto' && q.kind !== 'stable').map((q) => q.symbol));
   const sf = stonkFunMints(records, stockSet);
@@ -240,7 +240,7 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
       totalMarkets: sorted.length,
       quoteAssets: quotes.filter((q) => sorted.some((m) => m.quote === q.symbol)),
       generatedAt: now,
-      coverage: 'partial',
+      coverage: complete ? 'complete' : 'partial',
       platform: platform
         ? { source: platform.source, url: platform.url, volume24h: platform.total24h, volume7d: platform.total7d, volume30d: platform.total30d, volumeAllTime: platform.totalAllTime }
         : undefined,
@@ -248,7 +248,9 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
         platform
           ? `Platform-wide daily and all-time volume come from ${platform.source} (${platform.url}).`
           : 'Platform-wide volume is the sum of tracked markets (no platform-level source was reachable).',
-        'Individual markets are those GeckoTerminal currently lists, its busiest StonkFun pools, accumulated run after run. That is not every market ever launched, so counts are labelled “tracked”.',
+        complete
+          ? 'Markets are enumerated from chain state (via Helius): every pool of StonkFun’s bonding-curve program, plus every Raydium LaunchLab pool quoted in a tracked stock. LaunchLab pools quoted in SOL/USDC can’t be told apart from other launchpads, so those are only included when GeckoTerminal lists them as StonkFun. Creation times are each pool’s first on-chain transaction.'
+          : 'Individual markets are those GeckoTerminal currently lists, its busiest StonkFun pools, accumulated run after run. That is not every market ever launched, so counts are labelled “tracked”.',
         'Markets are tokens launched on StonkFun: GeckoTerminal indexes StonkFun’s bonding curve as its own exchange, and from Sept 6, 2026 StonkFun deploys through Raydium LaunchLab with stock-quoted pools. Each token’s graduated pools are merged into it.',
         'The archive starts on July 23, 2026, when the STONK platform token was deployed; StonkFun launched on August 3, 2026.',
         'Prices, liquidity, 24h volume and daily OHLCV come from GeckoTerminal.',

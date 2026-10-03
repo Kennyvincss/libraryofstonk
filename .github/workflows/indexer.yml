@@ -53,6 +53,8 @@ jobs:
         env:
           INDEXER_MAX_CALLS: ${{ github.event.inputs.max_calls || '600' }}
           INDEXER_MAX_MINUTES: ${{ github.event.inputs.max_minutes || '32' }}
+          # optional: complete on-chain enumeration (Settings → Secrets → Actions)
+          HELIUS_API_KEY: ${{ secrets.HELIUS_API_KEY }}
         run: npx tsx indexer/main.ts --out data-out
 
       - name: Publish to data branch

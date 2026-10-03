@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { BudgetExhausted, Gecko, log } from './client';
 import { buildArchive, groupByMint, type Tracked } from './build';
 import { fetchPlatformVolume, type PlatformVolume } from './llama';
+import { creationTime, enumeratePools, heliusCalls, heliusEnabled, learnLayouts, pool as mapLimit, tokenMetadata, type ChainPool, type ProgramLayout, type TokenMeta } from './helius';
 import { NETWORK, num, parseOhlcv, poolToRecord, tokenMap, type GtList, type GtPool, type GtToken, type Ohlcv, type PoolRecord, type QuoteRef } from '../src/data/live/gecko';
 import { CRYPTO_QUOTE_SPECS, EXCLUDED_MINTS, QUOTE_SPECS, specToQuote } from '../src/data/live/quotes';
 import { STONKFUN, stonkFunMints } from '../src/data/live/stonkfun';
@@ -40,6 +41,15 @@ interface State {
   stonkfunPage?: number;
   cryptoPrices?: Record<string, number>;
   platform?: PlatformVolume;
+  /** on-chain enumeration (Helius) */
+  chain?: {
+    layouts: ProgramLayout[];
+    layoutsAt: number;
+    pools: Record<string, ChainPool>;
+    meta: Record<string, TokenMeta>;
+    stats: Record<string, { priceUsd?: number; vol24?: number; mcapUsd?: number; fdvUsd?: number; reserveUsd?: number; observedAt: number }>;
+    enumeratedAt?: number;
+  };
 }
 
 const args = process.argv.slice(2);
@@ -141,6 +151,127 @@ function ingest(state: State, list: GtList<GtPool> | null, quotes: Map<string, Q
   return n;
 }
 
+const CHAIN_NEW_PER_RUN = Number(process.env.INDEXER_CHAIN_NEW_PER_RUN || 4000);
+
+/** Enumerate every StonkFun pool on-chain (Helius) and fill in metadata + creation times. */
+async function chainPhase(state: State, stocks: Map<string, QuoteRef & { priceUsd: number }>, now: number) {
+  const chain = (state.chain ??= { layouts: [], layoutsAt: 0, pools: {}, meta: {}, stats: {} });
+  const stockMints = new Set(stocks.keys());
+  if (!chain.layouts.length || now - chain.layoutsAt > 7 * DAY) {
+    const samples = Object.values(state.pools)
+      .map((p) => {
+        if (p.dexId === 'stonkfun') return { address: p.address, mint: p.mint, quoteMint: p.quoteMint, kind: 'stonkfun' as const };
+        if (p.dexId === 'raydium-launchlab' && stockMints.has(p.quoteMint) && p.createdAt >= STONKFUN.launchlab - DAY) return { address: p.address, mint: p.mint, quoteMint: p.quoteMint, kind: 'launchlab' as const };
+        return null;
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => (state.pools[b.address].vol24 ?? 0) - (state.pools[a.address].vol24 ?? 0));
+    const learned = await learnLayouts(samples);
+    if (learned.length) {
+      chain.layouts = learned;
+      chain.layoutsAt = now;
+    }
+  }
+  let found = 0;
+  for (const l of chain.layouts) {
+    const lists = l.kind === 'stonkfun' ? [await enumeratePools(l)] : await Promise.all([...stockMints].map((m) => enumeratePools(l, m)));
+    for (const cp of lists.flat()) {
+      found++;
+      const prev = chain.pools[cp.address];
+      chain.pools[cp.address] = { ...cp, createdAt: prev?.createdAt };
+    }
+  }
+  chain.enumeratedAt = now;
+  log(`helius: ${found} StonkFun pools on-chain (${Object.keys(chain.pools).length} known)`);
+
+  // creation times for new pools
+  const missing = Object.values(chain.pools).filter((p) => !p.createdAt).slice(0, CHAIN_NEW_PER_RUN);
+  let done = 0;
+  await mapLimit(missing, 6, async (p) => {
+    try {
+      p.createdAt = await creationTime(p.address);
+    } catch (e) {
+      log(`helius: creation time failed for ${p.address}: ${(e as Error).message}`);
+    }
+    if (++done % 500 === 0) log(`helius: creation times ${done}/${missing.length}`);
+  });
+
+  // token metadata (names, symbols, images)
+  const tokenOf = (p: ChainPool) => (stockMints.has(p.baseMint) || CRYPTO.quotes.has(p.baseMint) ? p.quoteMint : p.baseMint);
+  const needMeta = [...new Set(Object.values(chain.pools).map(tokenOf))].filter((m) => !chain.meta[m]);
+  if (needMeta.length) {
+    const meta = await tokenMetadata(needMeta);
+    for (const m of needMeta) chain.meta[m] = meta.get(m) ?? {};
+    log(`helius: metadata for ${meta.size} of ${needMeta.length} new tokens`);
+  }
+}
+
+/** Token stats for chain-only markets from GeckoTerminal (30 tokens per call). */
+async function chainStats(gt: Gecko, state: State, now: number, maxCalls: number) {
+  const chain = state.chain;
+  if (!chain) return;
+  const known = new Set(Object.values(state.pools).map((p) => p.mint));
+  const mints = [...new Set(Object.values(chain.pools).map((p) => p.baseMint))].filter((m) => !known.has(m) && chain.meta[m] !== undefined);
+  mints.sort((a, b) => (chain.stats[a]?.observedAt ?? 0) - (chain.stats[b]?.observedAt ?? 0));
+  let calls = 0;
+  for (let i = 0; i < mints.length && calls < maxCalls; i += 30) {
+    const batch = mints.slice(i, i + 30);
+    const res = await gt.get<{ data?: GtToken[] }>(`/networks/${NETWORK}/tokens/multi/${batch.join(',')}`);
+    calls++;
+    const attrs = new Map((res?.data ?? []).map((t) => [t.attributes.address, t.attributes as GtToken['attributes'] & Record<string, unknown>]));
+    for (const m of batch) {
+      const a = attrs.get(m);
+      const vol = a?.volume_usd as Record<string, string> | undefined;
+      chain.stats[m] = {
+        priceUsd: num(a?.price_usd),
+        vol24: num(vol?.h24) ?? 0,
+        mcapUsd: num(a?.market_cap_usd),
+        fdvUsd: num(a?.fdv_usd),
+        reserveUsd: num(a?.total_reserve_in_usd),
+        observedAt: now,
+      };
+    }
+  }
+  if (calls) log(`stats: refreshed ${Math.min(mints.length, calls * 30)} chain-only tokens`);
+}
+
+/** Pool records for on-chain pools GeckoTerminal never listed. */
+function chainRecords(state: State, stocks: Map<string, QuoteRef>, now: number): PoolRecord[] {
+  const chain = state.chain;
+  if (!chain) return [];
+  const out: PoolRecord[] = [];
+  for (const p of Object.values(chain.pools)) {
+    if (state.pools[p.address] || !p.createdAt) continue;
+    const swapped = stocks.has(p.baseMint) || CRYPTO.quotes.has(p.baseMint);
+    const token = swapped ? p.quoteMint : p.baseMint;
+    const qm = swapped ? p.baseMint : p.quoteMint;
+    const q = stocks.get(qm) ?? CRYPTO.quotes.get(qm);
+    if (!q || EXCLUDED_MINTS.has(token)) continue;
+    const meta = chain.meta[token] ?? {};
+    const st = chain.stats[token];
+    const symbol = (meta.symbol || token.slice(0, 5)).replace(/^\$/, '');
+    out.push({
+      address: p.address,
+      dexId: p.program === 'stonkfun' ? 'stonkfun' : 'raydium-launchlab',
+      createdAt: p.createdAt,
+      mint: token,
+      symbol,
+      name: meta.name || symbol,
+      image: meta.image,
+      quote: q.symbol,
+      quoteMint: qm,
+      swapped,
+      priceUsd: st?.priceUsd,
+      fdvUsd: st?.fdvUsd,
+      mcapUsd: st?.mcapUsd,
+      reserveUsd: st?.reserveUsd,
+      vol24: st?.vol24,
+      observedAt: st?.observedAt ?? now,
+    });
+  }
+  return out;
+}
+
 async function main() {
   const now = Date.now();
   await mkdir(join(OUT, 'v1', 'bars'), { recursive: true });
@@ -214,11 +345,23 @@ async function main() {
       ingest(state, res, qref, now);
     }
 
+    // complete enumeration from chain state when a Helius key is configured
+    if (heliusEnabled()) {
+      try {
+        await chainPhase(state, quotes, now);
+        await chainStats(gt, state, now, Math.floor(gt.remaining * 0.4));
+      } catch (e) {
+        if (e instanceof BudgetExhausted) throw e;
+        log(`helius phase failed: ${(e as Error).message}`);
+      }
+    }
+
     // history: new markets get full daily OHLCV, active ones a short top-up
     // one history per StonkFun token: its primary pool
     const stockSet = new Set(QUOTE_SPECS.map((s) => s.symbol));
-    const sf = stonkFunMints(Object.values(state.pools), stockSet);
-    const pools = groupByMint(Object.values(state.pools).filter((p) => sf.has(p.mint))).map((g) => g.primary);
+    const all = [...Object.values(state.pools), ...chainRecords(state, qref, now)];
+    const sf = stonkFunMints(all, stockSet);
+    const pools = groupByMint(all.filter((p) => sf.has(p.mint))).map((g) => g.primary);
     const queue = [
       ...pools.filter((p) => !state.history[p.address]).sort((a, b) => (b.vol24 ?? 0) - (a.vol24 ?? 0)),
       ...pools
@@ -247,7 +390,8 @@ async function main() {
   }
 
   // build outputs
-  const records = Object.values(state.pools);
+  const qrefAll = new Map(Object.entries(state.quotes).filter(([, v]) => v.mint).map(([sym, v]) => [v.mint, { symbol: sym, mint: v.mint }]));
+  const records = [...Object.values(state.pools), ...chainRecords(state, qrefAll, now)];
   const bars = new Map<string, Ohlcv[]>();
   for (const r of records) {
     const f = join(OUT, 'v1', 'bars', `${r.address}.json`);
@@ -257,7 +401,8 @@ async function main() {
     ...QUOTE_SPECS.filter((s) => state.quotes[s.symbol]?.mint).map((s) => specToQuote(s, state.quotes[s.symbol].mint, state.quotes[s.symbol].priceUsd)),
     ...CRYPTO_QUOTE_SPECS.map((c) => specToQuote(c, c.mint!, state.cryptoPrices?.[c.symbol] ?? 0)),
   ];
-  const built = buildArchive(records, bars, state.tracked, quoteAssets, now, state.platform);
+  const complete = Boolean(state.chain?.enumeratedAt && now - state.chain.enumeratedAt < 2 * DAY);
+  const built = buildArchive(records, bars, state.tracked, quoteAssets, now, state.platform, complete);
 
   // prune tracked days older than 400 days to bound state size
   const cutoff = now - 400 * DAY;
@@ -268,6 +413,7 @@ async function main() {
   await writeJson(join(OUT, 'v1', 'ecosystem.json'), built.ecosystem);
   await writeJson(join(OUT, 'v1', 'activity.json'), built.activity);
   await writeJson(join(OUT, 'cache', 'state.json'), state);
+  log(`helius calls this run: ${heliusCalls()}`);
   log(`done · ${built.markets.length} markets · ${bars.size} with history · ${gt.calls} API calls`);
 }
 
