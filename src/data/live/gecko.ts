@@ -113,18 +113,28 @@ export interface PoolRecord {
  * Turn a GeckoTerminal pool into a market record, or null when it is not a
  * token-vs-tokenized-stock pool (e.g. NVDAx/USDC, or two stocks).
  */
-export function poolToRecord(p: GtPool, tokens: Map<string, GtToken['attributes']>, quotes: Map<string, QuoteRef>, excluded: Set<string>, now: number): PoolRecord | null {
+export function poolToRecord(
+  p: GtPool,
+  tokens: Map<string, GtToken['attributes']>,
+  stockQuotes: Map<string, QuoteRef>,
+  excluded: Set<string>,
+  now: number,
+  /** crypto quotes (SOL, USDC) — only accepted for pools on these dexes */
+  crypto?: { quotes: Map<string, QuoteRef>; dexIds: readonly string[] },
+): PoolRecord | null {
   const a = p.attributes;
   const baseMint = addrOf(p.relationships?.base_token);
   const quoteMint = addrOf(p.relationships?.quote_token);
   if (!a?.address || !baseMint || !quoteMint) return null;
+  const dex = dexOf(p.relationships?.dex);
+  const quotes = crypto && dex && crypto.dexIds.includes(dex) && !stockQuotes.has(baseMint) && !stockQuotes.has(quoteMint) ? crypto.quotes : stockQuotes;
   const baseIsStock = quotes.has(baseMint);
   const quoteIsStock = quotes.has(quoteMint);
   if (baseIsStock === quoteIsStock) return null;
   const swapped = baseIsStock;
   const tokenMint = swapped ? quoteMint : baseMint;
   const stock = quotes.get(swapped ? baseMint : quoteMint)!;
-  if (excluded.has(tokenMint)) return null;
+  if (excluded.has(tokenMint) || stockQuotes.has(tokenMint)) return null;
 
   const tok = tokens.get(tokenMint);
   const [nameBase, nameQuote] = (a.name ?? '').split(' / ');
@@ -138,7 +148,7 @@ export function poolToRecord(p: GtPool, tokens: Map<string, GtToken['attributes'
   const quoteInBase = num(a.quote_token_price_base_token);
   return {
     address: a.address,
-    dexId: dexOf(p.relationships?.dex),
+    dexId: dex,
     createdAt: Number.isFinite(created) ? created : now,
     mint: tokenMint,
     symbol,

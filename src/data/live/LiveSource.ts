@@ -1,7 +1,10 @@
 import type { DataSource } from '../source';
 import type { ActivityEvent, Bar, EcosystemDay, Market, MarketPage, Snapshot, SourceMeta, Trade } from '../types';
 import { GECKO_API, NETWORK, parseOhlcv, parseTrades, poolToRecord, tokenMap, type GtList, type GtPool, type Ohlcv } from './gecko';
-import { EXCLUDED_MINTS } from './quotes';
+import { CRYPTO_QUOTE_SPECS, EXCLUDED_MINTS } from './quotes';
+import { STONKFUN, isStonkFunPool } from './stonkfun';
+
+const CRYPTO = { quotes: new Map(CRYPTO_QUOTE_SPECS.map((c) => [c.mint!, { symbol: c.symbol, mint: c.mint! }])), dexIds: STONKFUN.dexIds };
 
 const DAY = 86_400_000;
 
@@ -158,13 +161,15 @@ export class LiveSource implements DataSource {
     const pollNew = async () => {
       const [meta, ms] = await ready;
       if (stopped) return;
-      const quotes = new Map(meta.quoteAssets.filter((q) => q.mint).map((q) => [q.mint!, { symbol: q.symbol, mint: q.mint! }]));
+      const stocks = meta.quoteAssets.filter((q) => q.mint && q.kind !== 'crypto' && q.kind !== 'stable');
+      const quotes = new Map(stocks.map((q) => [q.mint!, { symbol: q.symbol, mint: q.mint! }]));
+      const stockSet = new Set(stocks.map((q) => q.symbol));
       for (const m of ms) seenPools.add(m.id);
       const res = await this.gt<GtList<GtPool>>(`/networks/${NETWORK}/new_pools?include=base_token,quote_token,dex&page=1`);
       const toks = tokenMap(res?.included);
       for (const p of res?.data ?? []) {
-        const r = poolToRecord(p, toks, quotes, EXCLUDED_MINTS, Date.now());
-        if (!r || seenPools.has(r.address)) continue;
+        const r = poolToRecord(p, toks, quotes, EXCLUDED_MINTS, Date.now(), CRYPTO);
+        if (!r || seenPools.has(r.address) || !isStonkFunPool(r, stockSet)) continue;
         seenPools.add(r.address);
         emit({ t: r.createdAt, kind: 'launch', marketId: this.byId.has(r.address) ? r.address : undefined, ticker: r.symbol, quote: r.quote, text: `New market launched: $${r.symbol} / ${r.quote}` });
       }
@@ -174,7 +179,7 @@ export class LiveSource implements DataSource {
     const pollTop = async () => {
       const [meta, ms] = await ready;
       if (stopped) return;
-      const quotes = new Map(meta.quoteAssets.filter((q) => q.mint).map((q) => [q.mint!, { symbol: q.symbol, mint: q.mint! }]));
+      const quotes = new Map(meta.quoteAssets.filter((q) => q.mint && q.kind !== 'crypto' && q.kind !== 'stable').map((q) => [q.mint!, { symbol: q.symbol, mint: q.mint! }]));
       const top = ms
         .filter((m) => m.status !== 'dead')
         .sort((a, b) => b.volume24hUsd - a.volume24hUsd)
@@ -182,7 +187,7 @@ export class LiveSource implements DataSource {
       const res = top.length ? await this.gt<GtList<GtPool>>(`/networks/${NETWORK}/pools/multi/${top.map((m) => m.id).join(',')}?include=base_token,quote_token`) : null;
       const toks = tokenMap(res?.included);
       for (const p of res?.data ?? []) {
-        const r = poolToRecord(p, toks, quotes, EXCLUDED_MINTS, Date.now());
+        const r = poolToRecord(p, toks, quotes, EXCLUDED_MINTS, Date.now(), CRYPTO);
         if (!r) continue;
         const m = this.byId.get(r.address);
         const now = { vol: r.vol24 ?? 0, traders: Math.max(r.buyers24 ?? 0, r.sellers24 ?? 0), price: r.priceUsd ?? 0 };

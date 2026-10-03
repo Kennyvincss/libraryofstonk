@@ -5,6 +5,7 @@
 import type { EcosystemDay, Market, MarketStatus, QuoteAsset, SourceMeta } from '../src/data/types';
 import type { Ohlcv, PoolRecord } from '../src/data/live/gecko';
 import { scoreMarkets } from '../src/engine/notability';
+import { STONKFUN, stonkFunMints } from '../src/data/live/stonkfun';
 
 const DAY = 86_400_000;
 const dayOf = (t: number) => Math.floor(t / DAY) * DAY;
@@ -119,7 +120,7 @@ export function buildMarket(r: PoolRecord, bars: Ohlcv[], tracked: Tracked[strin
   let change24h = r.change24h;
   if (change24h === undefined && bars.length >= 2) change24h = bars[bars.length - 1][4] / bars[bars.length - 2][4] - 1;
 
-  let status: MarketStatus = /launchlab|bonding/i.test(r.dexId ?? '') ? 'bonding' : 'graduated';
+  let status: MarketStatus = /launchlab|bonding|stonkfun/i.test(r.dexId ?? '') ? 'bonding' : 'graduated';
   if (now - lastTradeAt > 3 * DAY) status = 'dead';
   else if (Math.max(v7, vol24) < 40 && now - r.createdAt > 7 * DAY) status = 'dormant';
 
@@ -155,7 +156,10 @@ export function buildMarket(r: PoolRecord, bars: Ohlcv[], tracked: Tracked[strin
 }
 
 export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number): BuiltArchive {
-  const groups = groupByMint(records);
+  // StonkFun markets only: tokens with a StonkFun (or post-switch LaunchLab) pool
+  const stockSet = new Set(quotes.filter((q) => q.kind !== 'crypto' && q.kind !== 'stable').map((q) => q.symbol));
+  const sf = stonkFunMints(records, stockSet);
+  const groups = groupByMint(records.filter((r) => sf.has(r.mint) && r.createdAt >= STONKFUN.stonkDeployed - DAY));
   // per token: tracked counts summed across its pools, bars merged, keyed by primary pool
   const tracked: Tracked = {};
   const bars = new Map<string, Ohlcv[]>();
@@ -170,7 +174,7 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
     bars.set(g.primary.address, mergeBars(g, poolBars));
   }
   const markets = groups.map((g) => buildMarket(mergePools(g), bars.get(g.primary.address) ?? [], tracked[g.primary.address], now));
-  const start = dayOf(Math.min(now, ...markets.map((m) => m.createdAt)));
+  const start = dayOf(Math.min(now, STONKFUN.stonkDeployed, ...markets.map((m) => m.createdAt)));
   const days = Math.max(1, Math.floor((dayOf(now) - start) / DAY) + 1);
 
   // ecosystem by day
@@ -222,10 +226,11 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
       archiveStart: start,
       archiveEnd: now,
       totalMarkets: sorted.length,
-      quoteAssets: quotes,
+      quoteAssets: quotes.filter((q) => sorted.some((m) => m.quote === q.symbol)),
       generatedAt: now,
       method: [
-        'Markets are Solana pools where a token trades against a tokenized stock (xStocks), which is how StonkFun launches are quoted.',
+        'Markets are tokens launched on StonkFun: GeckoTerminal indexes StonkFun’s bonding curve as its own exchange, and from Sept 6, 2026 StonkFun deploys through Raydium LaunchLab with stock-quoted pools. Each token’s graduated pools are merged into it.',
+        'The archive starts on July 23, 2026, when the STONK platform token was deployed; StonkFun launched on August 3, 2026.',
         'Prices, liquidity, 24h volume and daily OHLCV come from GeckoTerminal.',
         'Lifetime traders and trades are the sum of the busiest rolling-24h counts observed each day since tracking began, so they undercount history before the first indexer run.',
       ],

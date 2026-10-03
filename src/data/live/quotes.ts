@@ -43,6 +43,12 @@ export const QUOTE_SPECS: QuoteSpec[] = [
   { symbol: 'JPMx', name: 'JPMorgan (tokenized)', underlying: 'JPM', kind: 'xstock', hue: 215 },
 ];
 
+/** Crypto quotes StonkFun also supports — only accepted for StonkFun's own pools. */
+export const CRYPTO_QUOTE_SPECS: QuoteSpec[] = [
+  { symbol: 'SOL', name: 'Solana', underlying: 'SOL', kind: 'crypto', hue: 275, mint: 'So11111111111111111111111111111111111111112' },
+  { symbol: 'USDC', name: 'USD Coin', underlying: 'USD', kind: 'stable', hue: 190, mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' },
+];
+
 /** Tokens that are never "launched markets" even if paired with a stock. */
 export const EXCLUDED_MINTS = new Set([
   'So11111111111111111111111111111111111111112', // wSOL

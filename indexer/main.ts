@@ -20,7 +20,8 @@ import { join } from 'node:path';
 import { BudgetExhausted, Gecko, log } from './client';
 import { buildArchive, groupByMint, type Tracked } from './build';
 import { NETWORK, num, parseOhlcv, poolToRecord, tokenMap, type GtList, type GtPool, type GtToken, type Ohlcv, type PoolRecord, type QuoteRef } from '../src/data/live/gecko';
-import { EXCLUDED_MINTS, QUOTE_SPECS, specToQuote } from '../src/data/live/quotes';
+import { CRYPTO_QUOTE_SPECS, EXCLUDED_MINTS, QUOTE_SPECS, specToQuote } from '../src/data/live/quotes';
+import { STONKFUN, stonkFunMints } from '../src/data/live/stonkfun';
 import type { QuoteAsset } from '../src/data/types';
 
 const DAY = 86_400_000;
@@ -34,6 +35,9 @@ interface State {
   history: Record<string, { fetchedAt: number }>;
   lastDeepDiscovery: Record<string, number>;
   lastShallowDiscovery?: Record<string, number>;
+  /** next deep page of StonkFun's own pool list to visit */
+  stonkfunPage?: number;
+  cryptoPrices?: Record<string, number>;
 }
 
 const args = process.argv.slice(2);
@@ -64,11 +68,18 @@ async function resolveQuotes(gt: Gecko, state: State, now: number): Promise<Map<
     const mint = state.quotes[s.symbol]?.mint ?? s.mint;
     if (mint) candidates.set(mint, s.symbol);
   }
+  for (const c of CRYPTO_QUOTE_SPECS) candidates.set(c.mint!, c.symbol);
+  state.cryptoPrices ??= {};
   const verified = new Map<string, { mint: string; priceUsd: number }>();
   const mints = [...candidates.keys()];
   for (let i = 0; i < mints.length; i += 30) {
     const res = await gt.get<{ data?: GtToken[] }>(`/networks/${NETWORK}/tokens/multi/${mints.slice(i, i + 30).join(',')}`);
     for (const t of res?.data ?? []) {
+      const crypto = CRYPTO_QUOTE_SPECS.find((c) => c.mint === t.attributes.address);
+      if (crypto) {
+        state.cryptoPrices![crypto.symbol] = num(t.attributes.price_usd) ?? state.cryptoPrices![crypto.symbol] ?? 0;
+        continue;
+      }
       const sym = candidates.get(t.attributes.address);
       if (sym && t.attributes.symbol?.toLowerCase() === sym.toLowerCase()) verified.set(sym, { mint: t.attributes.address, priceUsd: num(t.attributes.price_usd) ?? 0 });
     }
@@ -107,11 +118,13 @@ async function resolveQuotes(gt: Gecko, state: State, now: number): Promise<Map<
   return out;
 }
 
+const CRYPTO = { quotes: new Map(CRYPTO_QUOTE_SPECS.map((c) => [c.mint!, { symbol: c.symbol, mint: c.mint! }])), dexIds: STONKFUN.dexIds };
+
 function ingest(state: State, list: GtList<GtPool> | null, quotes: Map<string, QuoteRef>, now: number): number {
   const toks = tokenMap(list?.included);
   let n = 0;
   for (const p of list?.data ?? []) {
-    const r = poolToRecord(p, toks, quotes, EXCLUDED_MINTS, now);
+    const r = poolToRecord(p, toks, quotes, EXCLUDED_MINTS, now, CRYPTO);
     if (!r) continue;
     const prev = state.pools[r.address];
     // keep token metadata if this response didn't include it
@@ -147,6 +160,22 @@ async function main() {
       for (const p of res?.data ?? []) seen.add(p.attributes.address);
       ingest(state, res, qref, now);
     }
+    // StonkFun's own pool list: busiest two pages every run, plus two deeper rotating pages
+    {
+      const deepPage = state.stonkfunPage ?? 3;
+      let found = 0;
+      for (const page of [1, 2, deepPage, deepPage + 1]) {
+        const res = await gt.get<GtList<GtPool>>(`/networks/${NETWORK}/dexes/stonkfun/pools?include=base_token,quote_token,dex&sort=h24_volume_usd_desc&page=${page}`);
+        for (const p of res?.data ?? []) seen.add(p.attributes.address);
+        found += ingest(state, res, qref, now);
+        if (page >= deepPage && (res?.data?.length ?? 0) < 20) {
+          state.stonkfunPage = 3;
+          break;
+        }
+        if (page === deepPage + 1) state.stonkfunPage = deepPage + 2 > PAGES ? 3 : deepPage + 2;
+      }
+      log(`stonkfun dex: ${found} pools in view`);
+    }
     // the free API is tight (~10 calls/min from CI), so deep discovery rotates:
     // a few quotes get all pages each run, the rest just their busiest page
     state.lastShallowDiscovery ??= {};
@@ -180,8 +209,10 @@ async function main() {
     }
 
     // history: new markets get full daily OHLCV, active ones a short top-up
-    // one history per token: its primary pool
-    const pools = groupByMint(Object.values(state.pools)).map((g) => g.primary);
+    // one history per StonkFun token: its primary pool
+    const stockSet = new Set(QUOTE_SPECS.map((s) => s.symbol));
+    const sf = stonkFunMints(Object.values(state.pools), stockSet);
+    const pools = groupByMint(Object.values(state.pools).filter((p) => sf.has(p.mint))).map((g) => g.primary);
     const queue = [
       ...pools.filter((p) => !state.history[p.address]).sort((a, b) => (b.vol24 ?? 0) - (a.vol24 ?? 0)),
       ...pools
@@ -216,9 +247,11 @@ async function main() {
     const f = join(OUT, 'v1', 'bars', `${r.address}.json`);
     if (existsSync(f)) bars.set(r.address, await readJson<Ohlcv[]>(f, []));
   }
-  const quoteAssets: QuoteAsset[] = QUOTE_SPECS.filter((s) => state.quotes[s.symbol]?.mint).map((s) => specToQuote(s, state.quotes[s.symbol].mint, state.quotes[s.symbol].priceUsd));
-  const used = new Set(records.map((r) => r.quote));
-  const built = buildArchive(records, bars, state.tracked, quoteAssets.filter((q) => used.has(q.symbol)), now);
+  const quoteAssets: QuoteAsset[] = [
+    ...QUOTE_SPECS.filter((s) => state.quotes[s.symbol]?.mint).map((s) => specToQuote(s, state.quotes[s.symbol].mint, state.quotes[s.symbol].priceUsd)),
+    ...CRYPTO_QUOTE_SPECS.map((c) => specToQuote(c, c.mint!, state.cryptoPrices?.[c.symbol] ?? 0)),
+  ];
+  const built = buildArchive(records, bars, state.tracked, quoteAssets, now);
 
   // prune tracked days older than 400 days to bound state size
   const cutoff = now - 400 * DAY;

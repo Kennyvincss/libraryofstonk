@@ -9,6 +9,7 @@ import type { EcosystemDay, Market, Moment, QuoteAsset, SourceMeta } from '../da
 import { awardBadges, type BadgeAward, type BadgeId } from './badges';
 import { applyCuration } from './curation';
 import { detectMoments } from './moments';
+import { knownMoments } from './history';
 import { scoreMarkets, type NotabilityResult } from './notability';
 import { nameKeywords } from './text';
 import { fmtDuration, fmtMultiple, fmtNum, fmtPct, fmtUsd, fmtAgo } from '../lib/format';
@@ -92,7 +93,8 @@ export class Archive {
     // pass 1: notability without history → detect moments → pass 2 with history
     const first = scoreMarkets(markets, this.now, new Map());
     const detected = sourceMoments ?? detectMoments({ markets, ecosystem, score: (i) => first.score[i], start: meta.archiveStart });
-    this.moments = applyCuration(detected);
+    const curated = meta.isDemo ? [] : knownMoments(markets, meta.archiveStart, meta.archiveEnd, (id) => first.score[this.idx.get(id) ?? 0] ?? 0);
+    this.moments = applyCuration([...curated, ...detected.filter((d) => !curated.some((c) => c.id === d.id))]);
     this.publicMoments = this.moments.filter((m) => m.status === 'approved').sort((a, b) => b.start - a.start);
     this.momentsByMarket = new Map();
     const counts = new Map<string, number>();

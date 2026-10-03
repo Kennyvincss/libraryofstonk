@@ -75,16 +75,17 @@ type Macro = ReturnType<typeof buildMacro>;
 const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
 
 function adoption(day: number) {
-  // slow early months → a step-change in adoption around day ~195 (mid July)
-  return 0.08 + 0.92 * sigmoid((day - 195) / 9);
+  // the demo starts at StonkFun's launch (Aug 3); adoption steps up around
+  // day ~34, mirroring the Sept 6 move to Raydium LaunchLab
+  return 0.3 + 0.7 * sigmoid((day - 34) / 4);
 }
 
 /** Global market factor (price) and volume multiplier per day index. */
 function buildMacro(seed: number, days: number) {
   const r = rng(hash2(seed, 777));
   const crashes = [
-    { day: Math.round(r.range(96, 112)), depth: r.range(0.3, 0.4), recDays: r.range(12, 20) },
-    { day: Math.round(r.range(232, 244)), depth: r.range(0.35, 0.45), recDays: r.range(9, 15) },
+    { day: Math.round(r.range(20, 26)), depth: r.range(0.3, 0.4), recDays: r.range(6, 10) },
+    { day: Math.round(r.range(47, 53)), depth: r.range(0.35, 0.45), recDays: r.range(5, 8) },
   ];
   const G = new Float64Array(days + 2);
   const VM = new Float64Array(days + 2);
@@ -113,7 +114,7 @@ function buildShocks(seed: number, start: number, days: number): Shock[] {
   const r = rng(hash2(seed, 4242));
   const pool = [...THEMES];
   const shocks: Shock[] = [];
-  let d = r.range(14, 24);
+  let d = r.range(2, 6);
   let i = 0;
   while (d < days + 60) {
     const theme = pool.splice(Math.floor(r() * pool.length), 1)[0] ?? THEMES[i % THEMES.length];
@@ -125,7 +126,7 @@ function buildShocks(seed: number, start: number, days: number): Shock[] {
       ratePerDay: Math.exp(r.range(Math.log(35), Math.log(160))) * (0.25 + adoption(d)),
       quote: r.pick(theme.quotes),
     });
-    d += r.range(9, 19) * (1.1 - 0.4 * adoption(d));
+    d += r.range(4, 9) * (1.1 - 0.4 * adoption(d));
     i++;
   }
   return shocks;

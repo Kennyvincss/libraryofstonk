@@ -6,7 +6,7 @@ import { buildStory } from './story';
 import { buildDayIndex, dayLine } from './narration';
 import { fmtPct, fmtPrice } from '../lib/format';
 
-const START = Date.parse('2026-01-01T00:00:00Z');
+const START = Date.parse('2026-08-03T00:00:00Z'); // StonkFun launch
 const NOW = Date.parse('2026-10-03T12:00:00Z');
 let world: SimWorld;
 let archive: Archive;
@@ -54,7 +54,7 @@ describe('demo simulation', () => {
 describe('moment detection', () => {
   test('finds narrative bursts purely from market names', () => {
     const narratives = archive.publicMoments.filter((m) => m.kind === 'narrative');
-    expect(narratives.length).toBeGreaterThanOrEqual(8);
+    expect(narratives.length).toBeGreaterThanOrEqual(4);
     for (const mo of narratives) {
       // every member really carries the keyword the moment is named after
       const withKey = mo.marketIds.filter((id) => archive.byId.get(id)!.name.toLowerCase().includes(mo.key)).length;

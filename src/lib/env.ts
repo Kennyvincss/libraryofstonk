@@ -36,7 +36,7 @@ export const config = {
   apiUrl: ((env.VITE_ARCHIVE_API_URL as string | undefined) || '').replace(/\/$/, ''),
   liveUrl: (env.VITE_ARCHIVE_LIVE_URL as string | undefined) || '',
   livePollMs: Number(env.VITE_ARCHIVE_LIVE_POLL_MS) || 8000,
-  archiveStart: parseDate(env.VITE_ARCHIVE_START as string | undefined, '2026-01-01T00:00:00Z'),
+  archiveStart: parseDate(env.VITE_ARCHIVE_START as string | undefined, '2026-08-03T00:00:00Z'),
   explorerUrl: ((env.VITE_EXPLORER_URL as string | undefined) || 'https://solscan.io').replace(/\/$/, ''),
   appUrl: ((env.VITE_STONKFUN_APP_URL as string | undefined) || 'https://stonk.fun').replace(/\/$/, ''),
 } as const;

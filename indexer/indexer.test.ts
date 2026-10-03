@@ -29,7 +29,7 @@ const page: GtList<GtPool> = {
         transactions: { h24: { buys: 300, sells: 200, buyers: 120, sellers: 90 } },
         volume_usd: { h24: '88000' },
       },
-      relationships: { base_token: { data: { id: `solana_${TOK}`, type: 'token' } }, quote_token: { data: { id: `solana_${NVDAX}`, type: 'token' } }, dex: { data: { id: 'raydium-launchlab', type: 'dex' } } },
+      relationships: { base_token: { data: { id: `solana_${TOK}`, type: 'token' } }, quote_token: { data: { id: `solana_${NVDAX}`, type: 'token' } }, dex: { data: { id: 'stonkfun', type: 'dex' } } },
     },
     {
       // NVDAx/USDC — a stock/stable pool, not a launched market
@@ -43,7 +43,7 @@ const page: GtList<GtPool> = {
       id: 'solana_PoolC',
       type: 'pool',
       attributes: { address: 'PoolC', name: 'NVDAx / FROG', pool_created_at: '2026-09-10T00:00:00Z', base_token_price_usd: '187', quote_token_price_usd: '0.002', quote_token_price_base_token: '0.0000107', volume_usd: { h24: '0' } },
-      relationships: { base_token: { data: { id: `solana_${NVDAX}` } }, quote_token: { data: { id: 'solana_FrogMint' } } },
+      relationships: { base_token: { data: { id: `solana_${NVDAX}` } }, quote_token: { data: { id: 'solana_FrogMint' } }, dex: { data: { id: 'stonkfun' } } },
     },
   ],
   included: [
@@ -57,7 +57,7 @@ describe('GeckoTerminal parsing', () => {
   const recs = page.data!.map((p) => poolToRecord(p, toks, quotes, EXCLUDED_MINTS, NOW));
 
   test('keeps token-vs-stock pools and drops stock/stable pools', () => {
-    expect(recs[0]).toMatchObject({ address: 'PoolA', symbol: 'GPUG', name: 'GPU Goblin', quote: 'NVDAx', mint: TOK, swapped: false, dexId: 'raydium-launchlab', vol24: 88000, tx24: 500, buyers24: 120 });
+    expect(recs[0]).toMatchObject({ address: 'PoolA', symbol: 'GPUG', name: 'GPU Goblin', quote: 'NVDAx', mint: TOK, swapped: false, dexId: 'stonkfun', vol24: 88000, tx24: 500, buyers24: 120 });
     expect(recs[0]!.change24h).toBeCloseTo(0.125);
     expect(recs[0]!.image).toBe('https://img/x.png');
     expect(recs[1]).toBeNull();
@@ -102,10 +102,12 @@ describe('archive build', () => {
 
   test('marks silent markets dead and builds ecosystem + activity', () => {
     expect(built.markets.find((m) => m.id === 'PoolC')!.status).toBe('dead');
-    expect(built.meta.archiveStart).toBe(day('2026-09-01'));
-    expect(built.ecosystem[0].volumeUsd).toBe(400000);
-    expect(built.ecosystem[0].marketsCreated).toBe(1);
-    expect(built.activity.rows.PoolA[0]).toBe(0);
+    // the archive starts when STONK was deployed (July 23, 2026)
+    expect(built.meta.archiveStart).toBe(day('2026-07-23'));
+    const sep1 = built.ecosystem.findIndex((e) => e.t === day('2026-09-01'));
+    expect(built.ecosystem[sep1].volumeUsd).toBe(400000);
+    expect(built.ecosystem[sep1].marketsCreated).toBe(1);
+    expect(built.activity.rows.PoolA[0]).toBe(sep1);
     expect(built.activity.rows.PoolA.length).toBe(1 + 33);
   });
 
@@ -116,6 +118,16 @@ describe('archive build', () => {
     expect(b.markets[0].id).toBe('PoolA');
     expect(b.markets[0].volume24hUsd).toBe(100000);
     expect(b.markets[0].trades24h).toBe(550);
+  });
+
+  test('only StonkFun markets are kept', () => {
+    const pump = { ...recs[0], address: 'PumpPool', mint: 'PumpMint', symbol: 'PUMPY', dexId: 'pump-fun' };
+    const early = { ...recs[0], address: 'OldLaunchlab', mint: 'OldMint', dexId: 'raydium-launchlab', createdAt: day('2026-08-20') };
+    const lateLL = { ...recs[0], address: 'NewLaunchlab', mint: 'NewMint', dexId: 'raydium-launchlab', createdAt: day('2026-09-10') };
+    const stonk = { ...recs[0], address: 'StonkPool', mint: 'StonkMint', symbol: 'STONK', dexId: 'raydium-clmm', createdAt: day('2026-07-23') };
+    const old = { ...recs[0], address: 'OldPool', mint: 'OldMint2', dexId: 'stonkfun', createdAt: day('2025-10-21') };
+    const ids = buildArchive([recs[0], pump, early, lateLL, stonk, old], new Map(), {}, [{ symbol: 'NVDAx', name: 'NVIDIA', kind: 'xstock', underlying: 'NVDA', mint: NVDAX, priceUsd: 187, hue: 95 }], NOW).markets.map((m) => m.id).sort();
+    expect(ids).toEqual(['NewLaunchlab', 'PoolA', 'StonkPool']);
   });
 
   test('the site engine accepts the built dataset', () => {

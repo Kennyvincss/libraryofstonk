@@ -38,7 +38,7 @@ export function RewindPage() {
     const start = archive.meta.archiveStart;
     const first = archive.markets.filter((m) => m.createdAt < start + 14 * DAY).length;
     const moments = archive.publicMoments
-      .filter((m) => m.kind !== 'milestone' || /markets$/.test(m.key))
+      .filter((m) => m.kind !== 'milestone' || /markets$/.test(m.key) || m.origin === 'curated')
       .slice()
       .sort((a, b) => a.start - b.start);
     const total = Math.max(archive.ecosystem.reduce((s, d) => s + d.volumeUsd, 0), archive.markets.reduce((s, m) => s + m.volumeLifetimeUsd, 0));
@@ -49,7 +49,7 @@ export function RewindPage() {
         at: start + 14 * DAY,
         eyebrow: fmtDate(start),
         title: 'IN THE BEGINNING',
-        body: `StonkFun opened its doors. In the first two weeks, ${fmtNum(first)} markets appeared — tokens priced in stocks, ETFs and crypto. Nobody knew what was coming.`,
+        body: `The archive begins on ${fmtDate(start)}. In its first two weeks, ${fmtNum(first)} markets appeared — tokens priced in stocks, ETFs and crypto. Nobody knew what was coming.`,
         stats: [],
         highlight: null,
       },
