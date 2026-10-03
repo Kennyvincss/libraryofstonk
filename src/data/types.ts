@@ -80,6 +80,10 @@ export interface Market {
   holders?: number;
   /** Largest single trade in USD, where available */
   largestTradeUsd?: number;
+  /** tokens launched later under the same ticker (from on-chain names) and the span they cover */
+  copycats?: number;
+  copycatsFrom?: number;
+  copycatsTo?: number;
 }
 
 /** OHLCV bar. `t` is the bar open time. */
@@ -134,6 +138,8 @@ export interface Snapshot {
 }
 
 export type MomentKind =
+  | 'runner' // a coin that ran: its launch story
+  | 'news' // a documented platform event (curated, with a source)
   | 'narrative' // a burst of markets sharing a keyword
   | 'quote-rush' // a burst of markets launched against one quote asset
   | 'volume-spike' // ecosystem-wide volume anomaly
@@ -172,6 +178,12 @@ export interface Moment {
   origin: 'detected' | 'curated';
   /** Short machine-readable explanation of why it was flagged */
   evidence: string[];
+  /** story extras (runner and news moments) */
+  image?: string;
+  body?: string;
+  sourceUrl?: string;
+  /** the "LAUNCHED · 67 tokens across 11 days" panel */
+  callout?: { label: string; count: number; unit: string; detail: string; from: number; to: number };
 }
 
 export type ActivityKind =

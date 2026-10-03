@@ -5,6 +5,7 @@
  */
 import type { Bar, Market } from '../data/types';
 import { fmtDuration, fmtMultiple, fmtNum, fmtPct, fmtPrice, fmtUsd } from '../lib/format';
+import { supplyOf } from './stories';
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
@@ -29,7 +30,7 @@ export function buildStory(m: Market, bars: Bar[], now = Date.now()): Chapter[] 
   const ch: Chapter[] = [];
   const launch = bars[0].o;
   // circulating supply implied by the current market cap (1B is the launchpad default)
-  const supply = m.priceUsd > 0 && m.marketCapUsd > 0 ? m.marketCapUsd / m.priceUsd : 1e9;
+  const supply = supplyOf(m);
   // real-data sources may only provide volume, not per-trade counts
   const hasCounts = bars.some((b) => b.n > 0 || b.newTraders > 0);
 

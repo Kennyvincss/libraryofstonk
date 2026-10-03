@@ -8,6 +8,7 @@ import { fmtDate, fmtNum, fmtUsd } from '../lib/format';
 import { narrator } from '../lib/narrator';
 import { sceneLine } from '../engine/narration';
 import { useVoice } from '../hooks/useVoice';
+import { ShareButton, StoryCallout, StoryImage } from '../components/Story';
 
 const DAY = 86_400_000;
 const SCENE_MS = 7000;
@@ -53,14 +54,14 @@ export function RewindPage() {
         stats: [],
         highlight: null,
       },
-      ...moments.map<Scene>((mo) => ({
+      ...moments.map<Scene>((mo, n) => ({
         id: mo.id,
         kind: 'moment',
         at: Math.max(mo.end, mo.start + DAY),
-        eyebrow: `${MOMENT_KIND[mo.kind].glyph} ${MOMENT_KIND[mo.kind].label} · ${fmtDate(mo.start)}`,
+        eyebrow: `Moment ${n + 1} · ${MOMENT_KIND[mo.kind].label} · ${fmtDate(mo.start)}`,
         title: mo.title,
-        body: mo.tagline,
-        stats: [
+        body: mo.body ?? mo.tagline,
+        stats: mo.kind === 'runner' || mo.kind === 'news' ? [] : [
           { k: 'Markets', v: fmtNum(mo.marketIds.length) },
           { k: 'Volume', v: fmtUsd(mo.stats.volumeUsd) },
           { k: 'Traders', v: fmtNum(mo.stats.traders) },
@@ -222,10 +223,13 @@ export function RewindPage() {
         </div>
       </div>
 
-      <div className="rw-caption" key={scene.id}>
+      <div className={`rw-caption ${scene.moment ? `rk-${scene.moment.kind}` : ''}`} key={scene.id}>
         <div className="rw-eyebrow">{scene.eyebrow}</div>
         <h1 className="rw-title">{scene.title}</h1>
+        {scene.moment && <ShareButton id={scene.moment.id} className="btn ghost xs rw-share" />}
+        {scene.moment?.image && <StoryImage src={scene.moment.image} alt={scene.title} />}
         <p className="rw-body">{scene.body}</p>
+        {scene.moment?.callout && <StoryCallout c={scene.moment.callout} />}
         {scene.stats.length > 0 && (
           <dl className="rw-stats">
             {scene.stats.map((s) => (
@@ -287,6 +291,25 @@ export function RewindPage() {
           <button onClick={() => go(scenes.length - 1)} aria-label="Skip to the end" title="Skip to the end">
             ⏭
           </button>
+          <button
+            onClick={() => {
+              if (scenes.length > 3) {
+                let j = idx;
+                while (j === idx) j = 1 + Math.floor(Math.random() * (scenes.length - 2));
+                go(j);
+                setPlaying(true);
+              }
+            }}
+            aria-label="Shuffle"
+            title="Random moment"
+          >
+            ⤨
+          </button>
+          {scene.moment && (
+            <Link to={`/moments/${scene.moment.id}`} onClick={() => setPlaying(false)} className="rw-open" aria-label="Open this moment" title="Open this moment">
+              +
+            </Link>
+          )}
           {voice.supported && (
             <button className={voice.on ? 'rw-voice on' : 'rw-voice'} onClick={voice.toggle} aria-label={voice.on ? 'Mute voiceover' : 'Turn on voiceover'} title={voice.on ? 'Voiceover on' : 'Voiceover off'}>
               {voice.on ? '🔊' : '🔇'}

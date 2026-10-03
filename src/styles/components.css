@@ -1514,3 +1514,107 @@ a.pair:hover .pair-quote {
   background: #110e24;
   border: 1px solid var(--line-2);
 }
+
+/* ── story moments (runner / news) ─────────────────────────────── */
+.mk-runner {
+  --mc: var(--acid);
+}
+.mk-news {
+  --mc: var(--cyan);
+}
+.story-img {
+  position: relative;
+  margin: 0;
+  width: 132px;
+  aspect-ratio: 1;
+  padding: 6px;
+  flex: none;
+}
+.story-img.sm {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 92px;
+}
+.story-img.lg {
+  width: 168px;
+}
+.story-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 4px;
+  filter: saturate(1.1) contrast(1.05);
+  background: #07060f;
+}
+.story-img::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.55);
+}
+.story-img .c {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 0 solid var(--mc, var(--acid));
+}
+.story-img .tl {
+  left: 0;
+  top: 0;
+  border-width: 2px 0 0 2px;
+}
+.story-img .tr {
+  right: 0;
+  top: 0;
+  border-width: 2px 2px 0 0;
+}
+.story-img .bl {
+  left: 0;
+  bottom: 0;
+  border-width: 0 0 2px 2px;
+}
+.story-img .br {
+  right: 0;
+  bottom: 0;
+  border-width: 0 2px 2px 0;
+}
+.story-callout {
+  border: 1px solid color-mix(in srgb, var(--mc, var(--acid)) 45%, transparent);
+  background: color-mix(in srgb, var(--mc, var(--acid)) 8%, rgba(5, 4, 11, 0.8));
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.story-callout .sc-head {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--mc, var(--acid));
+  font-weight: 700;
+}
+.story-callout .sc-body b {
+  font-family: var(--display);
+  font-size: 1.4em;
+  color: var(--text);
+}
+.mo-callout {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mc);
+  margin: -2px 0 10px;
+}
+.mo-callout b {
+  color: var(--text);
+}
+.btn.xs {
+  padding: 6px 10px;
+  font-size: 10px;
+}

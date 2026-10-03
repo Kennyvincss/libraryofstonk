@@ -21,6 +21,7 @@ export function Home() {
   const narratives = archive.narratives.filter((n) => n.count >= 20).slice(0, 28);
   // per-market totals always exist; daily ecosystem history may still be backfilling
   const totalVol = archive.totalVolume;
+  const newToday = archive.publicMoments.filter((m) => m.start >= archive.now - 86_400_000).length;
 
   return (
     <div className="home">
@@ -30,6 +31,16 @@ export function Home() {
         <div className="hero-content">
           <div className="eyebrow">
             <span className="pulse-dot" /> {fmtNum(archive.marketCount)} {archive.tracked}markets · {archive.publicMoments.length} moments · {fmtUsd(totalVol)} traded{archive.meta.platform ? ` (${archive.meta.platform.source})` : ''}
+          </div>
+          <div className="hero-chips">
+            <Link to="/moments" className="chip">
+              Moments <b>{fmtNum(archive.publicMoments.length)}</b>
+            </Link>
+            {newToday > 0 && (
+              <Link to="/moments" className="chip new">
+                <span className="pulse-dot" /> {newToday} new today
+              </Link>
+            )}
           </div>
           <h1 className="hero-title">
             <span>STONKFUN</span>

@@ -3,8 +3,11 @@ import type { Moment } from '../data/types';
 import { fmtDate, fmtDuration, fmtNum, fmtUsd } from '../lib/format';
 import { useArchive } from '../hooks/archive';
 import { MiniConstellation } from './MiniConstellation';
+import { StoryImage } from './Story';
 
 export const MOMENT_KIND: Record<Moment['kind'], { label: string; glyph: string }> = {
+  runner: { label: 'Coin', glyph: '◉' },
+  news: { label: 'News', glyph: '✎' },
   narrative: { label: 'Narrative', glyph: '✺' },
   'quote-rush': { label: 'Quote rush', glyph: '⇶' },
   'volume-spike': { label: 'Volume spike', glyph: '⚡' },
@@ -22,6 +25,7 @@ export function MomentCard({ mo, size = 'md' }: { mo: Moment; size?: 'md' | 'lg'
     <article className={`moment-card mk-${mo.kind} ${size}`}>
       <div className="mo-art">
         <MiniConstellation ids={mo.marketIds.slice(0, 120)} />
+        {mo.image && <StoryImage src={mo.image} alt={mo.title} size="sm" />}
         <span className="mo-kind">
           <span aria-hidden>{k.glyph}</span> {k.label}
         </span>
@@ -30,13 +34,18 @@ export function MomentCard({ mo, size = 'md' }: { mo: Moment; size?: 'md' | 'lg'
       <div className="mo-body">
         <h3 className="mo-title">{mo.title}</h3>
         <p className="mo-tagline">“{mo.tagline}”</p>
+        {mo.callout && (
+          <div className="mo-callout">
+            {mo.callout.label} · <b>{fmtNum(mo.callout.count)}</b> {mo.callout.unit} {mo.callout.detail}
+          </div>
+        )}
         <dl className="mo-stats">
           <div>
             <dt>Markets</dt>
             <dd>{fmtNum(mo.marketIds.length)}</dd>
           </div>
           <div>
-            <dt>{mo.kind === 'crash' || mo.kind === 'recovery' || mo.kind === 'volume-spike' || mo.kind === 'milestone' ? 'Ecosystem volume' : 'Trading volume'}</dt>
+            <dt>{mo.kind === 'crash' || mo.kind === 'recovery' || mo.kind === 'volume-spike' || mo.kind === 'milestone' ? 'Ecosystem volume' : mo.kind === 'runner' ? 'Lifetime volume' : 'Trading volume'}</dt>
             <dd>{fmtUsd(mo.stats.volumeUsd)}</dd>
           </div>
           <div>

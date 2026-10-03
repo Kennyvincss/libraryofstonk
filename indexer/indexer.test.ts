@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { parseOhlcv, parseTrades, poolToRecord, tokenMap, type GtList, type GtPool } from '../src/data/live/gecko';
 import { EXCLUDED_MINTS } from '../src/data/live/quotes';
-import { buildArchive } from './build';
+import { annotateCopycats, buildArchive } from './build';
+import type { Market } from '../src/data/types';
+import { runnerMoments } from '../src/engine/stories';
 import { Archive } from '../src/engine/archive';
 
 const NVDAX = 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh';
@@ -163,5 +165,36 @@ describe('archive build', () => {
     const a = new Archive(built.meta, built.markets, built.ecosystem);
     expect(a.markets.length).toBe(2);
     expect(a.search('gpug').markets[0].id).toBe('PoolA');
+  });
+});
+
+describe('runner stories', () => {
+  const D = 86_400_000;
+  const t0 = Date.UTC(2026, 8, 10);
+  const base = (id: string, ticker: string, createdAt: number, extra: Partial<Market> = {}) =>
+    ({ id, mint: id, ticker, name: ticker, quote: 'NVDAx', createdAt, priceUsd: 0.001, marketCapUsd: 1_000_000, liquidityUsd: 80_000, peakDayVolumeUsd: 2e6, launchPriceUsd: 0.00001, athPriceUsd: 0.002, athAt: createdAt + 2 * D, volumeLifetimeUsd: 5e6, traders: 900, trades: 20_000, status: 'active', lastTradeAt: t0 + 20 * D, ...extra }) as unknown as Market;
+
+  test('counts same-ticker launches that follow within the window', () => {
+    const ms = [base('a', 'FROG', t0), base('b', 'frog', t0 + D), base('c', 'FROG', t0 + 5 * D), base('d', 'FROG', t0 + 40 * D), base('e', 'TOAD', t0 + D)];
+    annotateCopycats(ms, 14);
+    expect(ms[0]).toMatchObject({ copycats: 2, copycatsTo: t0 + 5 * D });
+    expect(ms[3].copycats).toBeUndefined();
+    expect(ms[4].copycats).toBeUndefined();
+  });
+
+  test('runner moments are built from the market numbers only', () => {
+    const m = base('a', 'FROG', t0, { image: 'https://x/y.png', copycats: 66, copycatsTo: t0 + 10 * D });
+    const small = base('s', 'TINY', t0, { volumeLifetimeUsd: 3000, traders: 20 });
+    const [mo, ...rest] = runnerMoments([m, small], new Map(), t0 + 30 * D);
+    expect(rest).toHaveLength(0);
+    expect(mo).toMatchObject({ kind: 'runner', title: 'FROG Launches', image: 'https://x/y.png', callout: { count: 67, unit: 'tokens', detail: 'across 11 days' } });
+    expect(mo.body).toContain('$2.00M peak');
+  });
+
+  test('mispriced market caps are never quoted', () => {
+    const m = base('a', 'FROG', t0, { marketCapUsd: 63_000_000, liquidityUsd: 4000 });
+    const [mo] = runnerMoments([m], new Map(), t0 + 30 * D);
+    expect(mo.body).not.toContain('market cap');
+    expect(mo.body).toContain('200× from its starting price');
   });
 });

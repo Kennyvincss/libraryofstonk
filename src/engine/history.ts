@@ -13,7 +13,10 @@ interface KnownEvent {
   at: number;
   title: string;
   tagline: string;
+  /** the longer story shown on the card */
+  body: string;
   source: string;
+  sourceUrl?: string;
   /** which markets belong to it */
   members: (markets: Market[]) => Market[];
 }
@@ -26,6 +29,7 @@ export const KNOWN_EVENTS: KnownEvent[] = [
     at: STONKFUN.stonkDeployed,
     title: 'STONK IS BORN',
     tagline: 'STONK, the platform token, was deployed in a pool quoted in SPYx, priced in index units rather than dollars.',
+    body: 'Eleven days before the launchpad opened, STONK went live in a pool quoted in SPYx, the tokenized S&P 500 ETF. The platform token was priced in index units rather than dollars, setting the pattern for everything that launched after it.',
     source: 'Platform token deployment, July 23, 2026',
     members: (ms) => ms.filter((m) => m.ticker.toUpperCase() === STONKFUN.platformTokenSymbol),
   },
@@ -34,6 +38,7 @@ export const KNOWN_EVENTS: KnownEvent[] = [
     at: STONKFUN.launch,
     title: 'STONKFUN OPENS',
     tagline: 'StonkFun officially launched: anyone could now create a coin priced in tokenized stocks.',
+    body: 'StonkFun officially launched on Solana. Anyone could now create a coin and pair it with a tokenized stock such as NVDAx or SPYx instead of SOL, so every chart was also a bet against a share price.',
     source: 'Official launch, August 3, 2026',
     members: createdWithin(STONKFUN.launch, 3),
   },
@@ -42,6 +47,7 @@ export const KNOWN_EVENTS: KnownEvent[] = [
     at: STONKFUN.launchlab,
     title: 'THE LAUNCHLAB SWITCH',
     tagline: 'New StonkFun deployments moved to Raydium LaunchLab, with graduated liquidity flowing on to Raydium and Jupiter.',
+    body: 'StonkFun moved new deployments to Raydium LaunchLab. Coins now launched on a LaunchLab bonding curve, still quoted in tokenized stocks, and graduated into Raydium pools routed by Jupiter.',
     source: 'Reported September 6, 2026 (The Block)',
     members: createdWithin(STONKFUN.launchlab, 3),
   },
@@ -52,9 +58,12 @@ export function knownMoments(markets: Market[], start: number, end: number, scor
     const ms = e.members(markets).sort((a, b) => score(b.id) - score(a.id));
     return {
       id: e.id,
-      kind: 'milestone',
+      kind: 'news',
       title: e.title,
       tagline: e.tagline,
+      body: e.body,
+      sourceUrl: e.sourceUrl,
+      image: ms[0]?.image,
       start: e.at,
       end: e.at + DAY,
       key: e.id,

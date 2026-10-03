@@ -37,7 +37,7 @@ export function buildDayIndex(a: Archive): Map<number, DayFacts> {
   for (const mo of a.publicMoments) {
     const f = idx.get(dayOf(mo.start));
     if (!f) continue;
-    if (mo.kind === 'milestone') f.milestones.push(mo);
+    if (mo.kind === 'milestone' || mo.kind === 'news') f.milestones.push(mo);
     else f.moments.push(mo);
   }
   return idx;
@@ -51,6 +51,8 @@ const KIND_SAY: Record<Moment['kind'], string> = {
   recovery: 'A recovery',
   launch: 'A launch',
   milestone: 'A milestone',
+  runner: 'A runner',
+  news: 'News',
 };
 
 const pick = <T,>(arr: T[], seed: string) => arr[hashString(seed) % arr.length];

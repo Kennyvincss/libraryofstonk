@@ -51,6 +51,21 @@ export const momentRules = {
   autoApproveConfidence: 0.55,
 };
 
+/** Runner stories: coins whose launch became a Moment. */
+export const storyRules = {
+  maxRunners: 40,
+  /** a runner traded at least this much over its life… */
+  minVolumeUsd: 50_000,
+  /** …with at least this many distinct traders */
+  minTraders: 150,
+  /** price multiple from launch worth mentioning */
+  minPeakMultiple: 2,
+  /** market caps above this multiple of pool liquidity are treated as mispriced */
+  maxMcapToLiquidity: 1000,
+  /** copycats counted for this many days after a launch */
+  copycatDays: 14,
+};
+
 /** Words that never define a narrative on their own. */
 export const STOPWORDS = new Set(
   'the a an of and or to in on for with by at is it this that be are was coin token inu sol x the of my your our just only not no yes'.split(' '),

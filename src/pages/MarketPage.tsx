@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useArchive, useSeries } from '../hooks/archive';
 import { useUi } from '../hooks/ui';
 import { buildStory } from '../engine/story';
+import { mcapReliable, peakMcap } from '../engine/stories';
 import { PriceChart } from '../components/PriceChart';
 import { ConnectionWeb, marketGraph } from '../components/ConnectionWeb';
 import { MarketCard } from '../components/MarketCard';
@@ -139,7 +140,7 @@ export function MarketPage() {
       <section className="mk-stats">
         <Stat k="Current price" v={fmtPrice(m.priceUsd)} sub={fmtQuotePrice(m.priceQuote, m.quote)} accent />
         <Stat k="24h change" v={<Change v={m.change24h} />} />
-        <Stat k="Market cap" v={fmtUsd(m.marketCapUsd)} sub={`ATH ${fmtUsd(m.athPriceUsd * (m.priceUsd > 0 && m.marketCapUsd > 0 ? m.marketCapUsd / m.priceUsd : 1e9))}`} />
+        <Stat k="Market cap" v={mcapReliable(m) ? fmtUsd(m.marketCapUsd) : '—'} sub={mcapReliable(m) ? `ATH ${fmtUsd(peakMcap(m))}` : 'not reliably priced'} />
         <Stat k="Liquidity" v={fmtUsd(m.liquidityUsd)} />
         <Stat k="Volume" v={fmtUsd(m.volumeLifetimeUsd)} sub={`${fmtUsd(m.volume24hUsd)} in 24h`} />
         <Stat k="Traders" v={fmtNum(m.traders)} sub={m.holders ? `${fmtNum(m.holders)} holders` : undefined} />

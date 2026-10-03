@@ -88,8 +88,11 @@ export function monthLabel(i: number) {
 
 export function fmtDuration(ms: number): string {
   const h = ms / 3_600_000;
-  if (h < 1) return `${Math.max(1, Math.round(h * 60))} minutes`;
-  if (h < 48) return `${Math.round(h)} hours`;
+  if (h < 1) {
+    const m = Math.max(1, Math.round(h * 60));
+    return m === 1 ? '1 minute' : `${m} minutes`;
+  }
+  if (h < 48) return Math.round(h) === 1 ? '1 hour' : `${Math.round(h)} hours`;
   const d = h / 24;
   if (d < 60) return `${Math.round(d)} days`;
   return `${Math.round(d / 30)} months`;

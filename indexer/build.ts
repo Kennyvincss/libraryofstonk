@@ -5,6 +5,7 @@
 import type { EcosystemDay, Market, MarketStatus, QuoteAsset, SourceMeta } from '../src/data/types';
 import type { Ohlcv, PoolRecord } from '../src/data/live/gecko';
 import { scoreMarkets } from '../src/engine/notability';
+import { storyRules } from '../src/engine/config';
 import { STONKFUN, stonkFunMints } from '../src/data/live/stonkfun';
 
 const DAY = 86_400_000;
@@ -165,6 +166,40 @@ export interface Platform {
   totalAllTime?: number;
 }
 
+/**
+ * Tokens launched under the same ticker within `storyRules.copycatDays` after a
+ * market — the "67 tokens across 11 days" that follow a runner.
+ */
+export function annotateCopycats(markets: Market[], days = storyRules.copycatDays) {
+  const bySym = new Map<string, number[]>();
+  for (const m of markets) {
+    const k = m.ticker.toUpperCase();
+    if (!k) continue;
+    let a = bySym.get(k);
+    if (!a) bySym.set(k, (a = []));
+    a.push(m.createdAt);
+  }
+  for (const a of bySym.values()) a.sort((x, y) => x - y);
+  for (const m of markets) {
+    const a = bySym.get(m.ticker.toUpperCase());
+    if (!a || a.length < 2) continue;
+    const end = m.createdAt + days * DAY;
+    let n = 0;
+    let last = 0;
+    for (const t of a) {
+      if (t > m.createdAt && t <= end) {
+        n++;
+        last = t;
+      }
+    }
+    if (n) {
+      m.copycats = n;
+      m.copycatsFrom = m.createdAt;
+      m.copycatsTo = last;
+    }
+  }
+}
+
 export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number, platform?: Platform | null, chain?: { totalPools: number; datedPools: number; legacyTotal?: number; createdByDay: Record<string, number> }): BuiltArchive {
   // complete once (nearly) every on-chain market has a launch date
   const complete = Boolean(chain && chain.totalPools > 0 && chain.datedPools / chain.totalPools >= 0.95);
@@ -186,6 +221,7 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
     bars.set(g.primary.address, mergeBars(g, poolBars));
   }
   const markets = groups.map((g) => buildMarket(mergePools(g), bars.get(g.primary.address) ?? [], tracked[g.primary.address], now));
+  annotateCopycats(markets);
   const start = dayOf(Math.min(now, STONKFUN.stonkDeployed, ...markets.map((m) => m.createdAt)));
   const days = Math.max(1, Math.floor((dayOf(now) - start) / DAY) + 1);
 

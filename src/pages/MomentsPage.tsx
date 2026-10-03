@@ -6,7 +6,7 @@ import type { MomentKind } from '../data/types';
 import { fmtDate, fmtNum, monthLabel } from '../lib/format';
 import { Footer } from '../components/Footer';
 
-const KINDS: MomentKind[] = ['narrative', 'quote-rush', 'launch', 'volume-spike', 'crash', 'recovery', 'milestone'];
+const KINDS: MomentKind[] = ['news', 'runner', 'narrative', 'quote-rush', 'launch', 'volume-spike', 'crash', 'recovery', 'milestone'];
 
 export function MomentsPage() {
   const { archive } = useArchive();

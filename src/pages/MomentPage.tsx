@@ -7,6 +7,7 @@ import { MarketCard } from '../components/MarketCard';
 import { fmtDate, fmtDuration, fmtMultiple, fmtNum, fmtUsd } from '../lib/format';
 import { NotFound } from './NotFound';
 import { Footer } from '../components/Footer';
+import { ShareButton, StoryCallout, StoryImage } from '../components/Story';
 
 export function MomentPage() {
   const { id = '' } = useParams();
@@ -38,16 +39,26 @@ export function MomentPage() {
             {MOMENT_KIND[mo.kind].glyph} {MOMENT_KIND[mo.kind].label}
             {mo.status === 'candidate' && <span className="cand">under review</span>}
           </div>
+          {mo.image && <StoryImage src={mo.image} alt={mo.title} size="lg" />}
           <h1>{mo.title}</h1>
-          <p className="mp-tagline">“{mo.tagline}”</p>
+          {mo.body ? <p className="mp-body">{mo.body}</p> : <p className="mp-tagline">“{mo.tagline}”</p>}
+          {mo.callout && <StoryCallout c={mo.callout} />}
+          {mo.origin === 'curated' && mo.evidence[0] && (
+            <p className="mp-source">
+              Source: {mo.sourceUrl ? <a href={mo.sourceUrl} target="_blank" rel="noreferrer">{mo.evidence[0]}</a> : mo.evidence[0]}
+            </p>
+          )}
           <div className="mp-when">
             {fmtDate(mo.start)} → {fmtDate(mo.end)} · {fmtDuration(Math.max(3_600_000, mo.end - mo.start))}
           </div>
+          <div className="mp-actions">
+          <ShareButton id={mo.id} />
           {mo.status === 'approved' && (
-            <Link to={`/rewind?from=${encodeURIComponent(mo.id)}`} className="btn ghost sm" style={{ marginTop: 14 }}>
+            <Link to={`/rewind?from=${encodeURIComponent(mo.id)}`} className="btn ghost sm">
               ▶ Play the rewind from here
             </Link>
           )}
+          </div>
         </div>
       </section>
 

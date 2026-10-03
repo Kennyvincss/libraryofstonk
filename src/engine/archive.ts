@@ -10,6 +10,7 @@ import { awardBadges, type BadgeAward, type BadgeId } from './badges';
 import { applyCuration } from './curation';
 import { detectMoments } from './moments';
 import { knownMoments } from './history';
+import { runnerMoments } from './stories';
 import { scoreMarkets, type NotabilityResult } from './notability';
 import { nameKeywords } from './text';
 import { fmtDuration, fmtMultiple, fmtNum, fmtPct, fmtUsd, fmtAgo } from '../lib/format';
@@ -94,7 +95,8 @@ export class Archive {
     const first = scoreMarkets(markets, this.now, new Map());
     const detected = sourceMoments ?? detectMoments({ markets, ecosystem, score: (i) => first.score[i], start: meta.archiveStart });
     const curated = meta.isDemo ? [] : knownMoments(markets, meta.archiveStart, meta.archiveEnd, (id) => first.score[this.idx.get(id) ?? 0] ?? 0);
-    this.moments = applyCuration([...curated, ...detected.filter((d) => !curated.some((c) => c.id === d.id))]);
+    const runners = runnerMoments(markets, this.quotes, this.now);
+    this.moments = applyCuration([...curated, ...runners, ...detected.filter((d) => !curated.some((c) => c.id === d.id))]);
     if (meta.coverage === 'partial') this.moments = this.moments.filter((m) => !(m.kind === 'milestone' && m.key.endsWith('-markets')));
     this.publicMoments = this.moments.filter((m) => m.status === 'approved').sort((a, b) => b.start - a.start);
     this.momentsByMarket = new Map();
