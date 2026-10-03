@@ -22,7 +22,8 @@ describe('pre-LaunchLab launches', () => {
     const c = legacyCounts(cache, aug3, sep6);
     expect(c.total).toBe(3);
     expect(c.byDay).toEqual({ [String(aug3)]: 2, [String(aug3 + 2 * D)]: 1 });
-    expect(c.pending).toBe(2);
+    expect(c.pending).toBe(1);
+    expect(c.busy).toBe(1);
   });
 
   test('compact cache rows round-trip', () => {

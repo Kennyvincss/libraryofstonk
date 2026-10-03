@@ -115,6 +115,8 @@ export async function classify(cache: LegacyCache, minutes: number) {
       p.createdAt = c?.t ?? (deep ? GAVE_UP : 0);
       if (c) dated++;
     } catch (e) {
+      // a busy pool that fails its deep lookup is given up on rather than retried forever
+      if (p.createdAt === 0) p.createdAt = GAVE_UP;
       log(`legacy: ${p.address}: ${(e as Error).message}`);
     }
   });
@@ -140,8 +142,11 @@ export function legacyCounts(cache: LegacyCache, from: number, to: number) {
     const d = String(Math.floor(p.createdAt! / DAY) * DAY);
     byDay[d] = (byDay[d] ?? 0) + 1;
   }
-  const pending = Object.values(cache.pools).filter((p) => p.createdAt === undefined || p.createdAt === 0).length;
-  return { byDay, total: launches.length, pending };
+  // counts are usable once every pool has been looked up; a handful of very busy
+  // pools (oldest signature beyond reach) may stay undated and are reported apart
+  const pending = Object.values(cache.pools).filter((p) => p.createdAt === undefined).length;
+  const busy = Object.values(cache.pools).filter((p) => p.createdAt === 0 || p.createdAt === GAVE_UP).length;
+  return { byDay, total: launches.length, pending, busy };
 }
 
 // compact cache rows: [address, token, quote, createdSec (-1 undated), launch (-1 unchecked), sig, signer]

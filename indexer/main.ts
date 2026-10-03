@@ -267,7 +267,7 @@ async function legacyPhase(state: State, stockMints: Set<string>, now: number) {
   const c = legacyCounts(cache, STONKFUN.launch, STONKFUN.launchlab);
   chain.legacy = { byDay: c.byDay, total: c.total, countedAt: now, complete: c.pending === 0 && c.total > 0 };
   log(
-    `legacy: ${c.total} launches Aug 3 – Sept 5 (coin-vs-stock CLMM pools)` + (c.pending ? `, ${c.pending} pools still to date` : ''),
+    `legacy: ${c.total} launches Aug 3 – Sept 5 (coin-vs-stock CLMM pools)` + (c.pending ? `, ${c.pending} pools still to date` : '') + (c.busy ? `, ${c.busy} very busy pools undated` : ''),
   );
 }
 
