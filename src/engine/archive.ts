@@ -145,7 +145,7 @@ export class Archive {
   /** platform-wide volume: authoritative source if present, else the daily series, else market totals */
   get totalVolume(): number {
     const eco = this.ecosystem.reduce((s, d) => s + d.volumeUsd, 0);
-    return this.meta.platform?.volumeAllTime ?? Math.max(eco, this.markets.reduce((s, m) => s + m.volumeLifetimeUsd, 0));
+    return Math.max(this.meta.platform?.volumeAllTime ?? 0, eco, this.markets.reduce((s, m) => s + m.volumeLifetimeUsd, 0));
   }
 
   // ── basics ─────────────────────────────────────────────────────────────────

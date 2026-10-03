@@ -223,7 +223,10 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
   }
   eco.forEach((e, i) => (e.marketReturn = retW[i] > 0 ? e.marketReturn! / retW[i] : 0));
   // platform-wide daily volume is authoritative when we have it
-  if (platform && Object.keys(platform.daily).length) for (const e of eco) e.volumeUsd = platform.daily[String(e.t)] ?? 0;
+  // (its series can start later than StonkFun did: earlier days keep the per-market sums)
+  const platformDays = platform ? Object.keys(platform.daily).map(Number) : [];
+  const platformFrom = platformDays.length ? Math.min(...platformDays) : Infinity;
+  for (const e of eco) if (e.t >= platformFrom) e.volumeUsd = platform!.daily[String(e.t)] ?? 0;
 
   // most notable first, exactly how the site will rank them
   const { rank } = scoreMarkets(markets, now, new Map());
@@ -246,7 +249,7 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
         : undefined,
       method: [
         platform
-          ? `Platform-wide daily and all-time volume come from ${platform.source} (${platform.url}).`
+          ? `Platform-wide daily volume comes from ${platform.source} (${platform.url})${Number.isFinite(platformFrom) ? `, whose StonkFun series begins ${new Date(platformFrom).toISOString().slice(0, 10)}; earlier days are summed from each market’s own daily history` : ''}.`
           : 'Platform-wide volume is the sum of tracked markets (no platform-level source was reachable).',
         complete
           ? 'Markets are enumerated from chain state (via Helius): every pool of StonkFun’s bonding-curve program, plus every Raydium LaunchLab pool quoted in a tracked stock. LaunchLab pools quoted in SOL/USDC can’t be told apart from other launchpads, so those are only included when GeckoTerminal lists them as StonkFun. Creation times are each pool’s first on-chain transaction.'
