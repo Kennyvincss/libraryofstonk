@@ -20,9 +20,11 @@ export interface UniverseProps {
   initialZoom?: number;
   /** change this value to fly back to the full view */
   fitKey?: string | number;
+  /** pulse these markets once whenever `key` changes */
+  pulse?: { key: string; ids: string[]; color?: string } | null;
 }
 
-export function Universe({ mode, highlight, fitHighlight, filter, activity, focusId, focusCluster, onSelect, onCamera, controls, className, initialZoom, fitKey }: UniverseProps) {
+export function Universe({ mode, highlight, fitHighlight, filter, activity, focusId, focusCluster, onSelect, onCamera, controls, className, initialZoom, fitKey, pulse }: UniverseProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const r = useRef<UniverseRenderer | null>(null);
   const { layout, archive } = useArchive();
@@ -51,6 +53,10 @@ export function Universe({ mode, highlight, fitHighlight, filter, activity, focu
   }, [layout]);
 
   useEffect(() => r.current?.setMode(mode), [mode]);
+  useEffect(() => {
+    if (pulse) for (const id of pulse.ids) r.current?.pulse(id, pulse.color);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pulse?.key]);
   useEffect(() => {
     if (fitKey !== undefined) r.current?.fit(false, initialZoom ?? 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps

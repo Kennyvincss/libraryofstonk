@@ -33,6 +33,7 @@ const KIND_HUE: Partial<Record<UNode['kind'], number>> = {
 };
 
 const TAU = Math.PI * 2;
+const NEWBORN_MS = 3 * 86_400_000;
 const CELL = 48;
 
 function makeGlow(hue: number, sat: number, light: number): HTMLCanvasElement {
@@ -83,6 +84,8 @@ export class UniverseRenderer {
   private dispA = new Float32Array(0);
   private targR = new Float32Array(0);
   private targA = new Float32Array(0);
+  /** during time travel: markets actually trading at that date */
+  private live = new Uint8Array(0);
   private drawOrder: number[] = [];
   private stars: { x: number; y: number; s: number; p: number; tw: number }[] = [];
   private glow = new Map<string, HTMLCanvasElement>();
@@ -144,6 +147,7 @@ export class UniverseRenderer {
     this.dispA = new Float32Array(n);
     this.targR = new Float32Array(n);
     this.targA = new Float32Array(n);
+    this.live = new Uint8Array(n);
     for (let k = 0; k < n; k++) {
       this.dispR[k] = prevR.length === n ? prevR[k] : 0;
       this.dispA[k] = 0;
@@ -326,6 +330,7 @@ export class UniverseRenderer {
     const act = this.activity;
     for (let k = 0; k < nodes.length; k++) {
       const n = nodes[k];
+      this.live[k] = 0;
       let r = n.r;
       let a = n.kind === 'quiet' ? 0.5 : n.kind === 'crashed' ? 0.55 : 1;
       if (act) {
@@ -335,6 +340,7 @@ export class UniverseRenderer {
         } else {
           const v = act.map.get(n.id) ?? 0;
           const live = v > 25;
+          this.live[k] = live ? 1 : 0;
           r = live ? Math.min(18, (0.7 + 1.25 * Math.log10(1 + v / 150)) * (0.7 + 0.8 * n.score)) : n.r * 0.35;
           a = live ? 1 : 0.18;
         }
@@ -686,7 +692,23 @@ export class UniverseRenderer {
       const sy = (n.y - this.cam.y) * z + h / 2;
       if (sx < -margin || sx > w + margin || sy < -margin || sy > h + margin) continue;
       const rr = this.dispR[k] * z;
-      const full = n.rank < lim || (this.highlight && this.highlight[k]) || rr > 2.2;
+      if (this.activity) {
+        // time travel: markets born in the last few days flash as they appear
+        const age = this.activity.at - n.createdAt;
+        if (age >= 0 && age < NEWBORN_MS) {
+          const f = age / NEWBORN_MS;
+          ctx.globalAlpha = (1 - f) * 0.9;
+          ctx.strokeStyle = '#5ee7ff';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 2.5 + f * 12 + rr, 0, TAU);
+          ctx.stroke();
+          ctx.globalAlpha = 1 - f;
+          ctx.fillStyle = '#e8fbff';
+          ctx.fillRect(sx - 1.2, sy - 1.2, 2.4, 2.4);
+        }
+      }
+      const full = n.rank < lim || (this.highlight && this.highlight[k]) || rr > 2.2 || (this.activity !== null && this.live[k] === 1);
       if (!full) {
         ctx.globalAlpha = a * 0.55;
         ctx.fillStyle = `hsl(${n.hue},70%,75%)`;
@@ -699,7 +721,7 @@ export class UniverseRenderer {
       const pulse = n.kind === 'high-volume' || n.kind === 'legendary' ? 1 + 0.08 * Math.sin(t * 2.2 + k * 0.7) : 1;
       const lit = this.highlight !== null && this.highlight[k] === 1;
       // halo grows sub-linearly so deep zoom shows crisp stars, not fog
-      const S = Math.max(lit ? 11 : 3, Math.min(rr * 5.2, rr * 2.2 + 16) * pulse);
+      const S = Math.max(lit ? 11 : this.activity && this.live[k] ? 6 : 3, Math.min(rr * 5.2, rr * 2.2 + 16) * pulse);
       ctx.globalAlpha = Math.min(1, alpha) * (rr > 6 ? 0.8 : 1);
       ctx.drawImage(this.glowFor(n.hue, n.kind), sx - S / 2, sy - S / 2, S, S);
       if (lit && rr < 6) {

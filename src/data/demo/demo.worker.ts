@@ -6,6 +6,7 @@
 import { buildWorld, DEMO_SEED, simulateBars, simulateTrades, type SimWorld } from './simulate';
 
 let world: SimWorld | undefined;
+let order: SimWorld['markets'] = [];
 const WEEK = 7 * 86_400_000;
 
 type Req =
@@ -20,7 +21,7 @@ self.onmessage = (ev: MessageEvent<Req>) => {
     switch (req.type) {
       case 'init': {
         world = buildWorld(DEMO_SEED, req.start, req.now);
-        const order = [...world.markets].sort((a, b) => b.volumeLifetimeUsd - a.volumeLifetimeUsd);
+        order = [...world.markets].sort((a, b) => b.volumeLifetimeUsd - a.volumeLifetimeUsd);
         post(req.id, { markets: order, ecosystem: world.ecosystem, quotes: world.quotes });
         break;
       }
@@ -41,17 +42,19 @@ self.onmessage = (ev: MessageEvent<Req>) => {
         const pos = (req.at - w.start) / WEEK;
         const wi = Math.max(0, Math.min(w.weeks - 1, Math.floor(pos)));
         const frac = pos - Math.floor(pos);
-        const ids: string[] = [];
-        const vals: number[] = [];
-        for (const m of w.markets) {
-          if (m.createdAt > req.at) continue;
+        // aligned with the market order sent at init; -1 = not created yet
+        const vals = new Float32Array(order.length);
+        for (let i = 0; i < order.length; i++) {
+          const m = order[i];
+          if (m.createdAt > req.at) {
+            vals[i] = -1;
+            continue;
+          }
           const wk = w.weekly.get(m.id)!;
           // trailing 7d ≈ blend of the current and previous week buckets
-          const v = wk[wi] * frac + (wi > 0 ? wk[wi - 1] : 0) * (1 - frac);
-          ids.push(m.id);
-          vals.push(v);
+          vals[i] = wk[wi] * frac + (wi > 0 ? wk[wi - 1] : 0) * (1 - frac);
         }
-        post(req.id, { ids, vals });
+        (self as unknown as Worker).postMessage({ id: req.id, result: vals }, [vals.buffer]);
         break;
       }
     }

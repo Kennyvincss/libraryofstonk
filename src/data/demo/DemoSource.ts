@@ -96,9 +96,10 @@ export class DemoSource implements DataSource {
 
   async snapshot(at: number): Promise<Snapshot> {
     await this.ready;
-    const r = await this.call<{ ids: string[]; vals: number[] }>({ type: 'snapshot', at });
+    const { markets } = await this.ready;
+    const vals = await this.call<Float32Array>({ type: 'snapshot', at });
     const activity = new Map<string, number>();
-    r.ids.forEach((id, i) => activity.set(id, r.vals[i]));
+    for (let i = 0; i < vals.length; i++) if (vals[i] >= 0) activity.set(markets[i].id, vals[i]);
     return { at, activity };
   }
 

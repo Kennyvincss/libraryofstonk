@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { MOMENT_KIND } from '../components/MomentCard';
 import { Universe } from '../universe/Universe';
 import { useArchive } from '../hooks/archive';
 import { Timeline } from '../components/Timeline';
@@ -7,7 +8,7 @@ import { LivePanel } from '../components/LivePanel';
 import type { UNode } from '../universe/layout';
 import type { VisualKind } from '../engine/archive';
 import { KIND_LABEL } from '../components/bits';
-import { fmtNum } from '../lib/format';
+import { fmtDate, fmtNum } from '../lib/format';
 import { useUi } from '../hooks/ui';
 
 const KINDS: VisualKind[] = ['legendary', 'high-volume', 'unusual', 'historical', 'crashed', 'active'];
@@ -33,20 +34,46 @@ export function UniversePage() {
   const [q, setQ] = useState(params.get('q') ?? '');
   const [focusCluster, setFocusCluster] = useState<string | null>(params.get('galaxy'));
   const [panel, setPanel] = useState(() => window.innerWidth > 900);
-  const req = useRef(0);
 
-  // time travel: fetch the snapshot for the chosen moment (debounced)
+  // time travel: keep exactly one snapshot request in flight and always ask
+  // for the newest date, so playback renders continuously instead of
+  // cancelling every frame
+  const tRef = useRef<number | null>(t);
+  tRef.current = t;
+  const inflight = useRef(false);
+  const wanted = useRef<number | null>(null);
+  const pump = useCallback(() => {
+    if (inflight.current || wanted.current === null) return;
+    const at = wanted.current;
+    wanted.current = null;
+    inflight.current = true;
+    source
+      .snapshot(at)
+      .then((s) => {
+        if (tRef.current !== null) setActivity({ at, map: s.activity });
+      })
+      .finally(() => {
+        inflight.current = false;
+        pump();
+      });
+  }, [source]);
   useEffect(() => {
     if (t === null) {
+      wanted.current = null;
       setActivity(null);
       return;
     }
-    const id = ++req.current;
-    const h = setTimeout(() => {
-      source.snapshot(t).then((s) => id === req.current && setActivity({ at: t, map: s.activity }));
-    }, 60);
-    return () => clearTimeout(h);
-  }, [t, source]);
+    wanted.current = t;
+    pump();
+  }, [t, pump]);
+
+  // moments happening at the current point in time
+  const happening = useMemo(
+    () => (t === null ? [] : archive.publicMoments.filter((m) => m.kind !== 'milestone' && t >= m.start && t <= m.end + 2 * 86_400_000).slice(0, 2)),
+    [archive, t],
+  );
+  const pulse = useMemo(() => (happening[0] ? { key: happening[0].id, ids: happening[0].marketIds.slice(0, 12), color: '#ffcf5a' } : null), [happening]);
+  const bornBy = useMemo(() => (t === null ? 0 : archive.markets.reduce((n, m) => n + (m.createdAt <= t ? 1 : 0), 0)), [archive, t]);
 
   const onTime = useCallback(
     (nt: number | null) => {
@@ -92,7 +119,22 @@ export function UniversePage() {
 
   return (
     <div className="universe-page">
-      <Universe mode="full" filter={filter} activity={activity} focusCluster={focusCluster} focusId={params.get('focus')} controls />
+      <Universe mode="full" filter={filter} activity={activity} focusCluster={focusCluster} focusId={params.get('focus')} pulse={pulse} controls />
+
+      {t !== null && (
+        <div className="tt-overlay" aria-live="polite">
+          <div className="tt-date">{fmtDate(t)}</div>
+          <div className="tt-count">
+            <b>{fmtNum(bornBy)}</b> markets alive in the archive
+          </div>
+          {happening.map((m) => (
+            <Link key={m.id} to={`/moments/${m.id}`} className={`tt-moment mk-${m.kind}`}>
+              <span>{MOMENT_KIND[m.kind].glyph} Now happening</span>
+              <b>{m.title}</b>
+            </Link>
+          ))}
+        </div>
+      )}
 
       <aside className={`navigator ${panel ? 'open' : ''}`}>
         <button className="nav-toggle" onClick={() => setPanel((p) => !p)} aria-expanded={panel}>
