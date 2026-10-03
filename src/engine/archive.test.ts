@@ -3,6 +3,7 @@ import { buildWorld, DEMO_SEED, simulateBars, type SimWorld } from '../data/demo
 import { Archive, parseDates } from './archive';
 import { badgeRules } from './config';
 import { buildStory } from './story';
+import { buildDayIndex, dayLine } from './narration';
 import { fmtPct, fmtPrice } from '../lib/format';
 
 const START = Date.parse('2026-01-01T00:00:00Z');
@@ -113,6 +114,17 @@ describe('discovery & story', () => {
     expect(archive.search('nvda').quotes.map((q) => q.symbol)).toContain('NVDAx');
     expect(parseDates('sep 14', START, NOW)[0].t).toBe(Date.UTC(2026, 8, 14));
     expect(parseDates('2026-09', START, NOW)[0].t).toBe(Date.UTC(2026, 8, 1));
+  });
+});
+
+describe('narration', () => {
+  test('every day gets a line, and moments are announced on the day they begin', () => {
+    const facts = buildDayIndex(archive);
+    for (const f of facts.values()) expect(dayLine(archive, f).length).toBeGreaterThan(10);
+    const mo = archive.publicMoments.find((m) => m.kind === 'narrative')!;
+    const line = dayLine(archive, facts.get(Math.floor(mo.start / 86_400_000) * 86_400_000)!);
+    expect(line).toContain('A moment begins');
+    expect(line).not.toMatch(/[$×]/);
   });
 });
 

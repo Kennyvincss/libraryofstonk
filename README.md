@@ -28,8 +28,8 @@ cp .env.example .env
 | Area | Where | Notes |
 |---|---|---|
 | **Universe** | `/universe`, homepage background | Canvas renderer with drag, zoom, pinch, hover cards and click-through. Has filters by kind and galaxy, live pulses, and level of detail by notability. |
-| **Time travel** | timeline on `/universe` | Drag, play, or use the arrow keys. The universe re-renders from `snapshot(t)`. Shows a monthly summary (markets, volume, notable markets, moments). |
-| **Rewind** | `/rewind` (homepage, Moments, each moment page) | A playable film of StonkFun history: one scene per moment, with the universe time-travelling and lighting up that moment's markets. Play/pause (`space`), previous/next (`←` `→`), restart, skip to the end, skip out (`Esc`), and a clickable scene progress bar. `?from=<momentId>` starts mid-film. |
+| **Time travel** | timeline on `/universe` | Drag, play, or use the arrow keys. Playback holds each day for 5 seconds (1×; 2×/4×/10× available), with ◀ ▶ day stepping, subtitles and a data-written voiceover. The universe re-renders from `snapshot(t)`. Shows a monthly summary (markets, volume, notable markets, moments). |
+| **Rewind** | `/rewind` (homepage, Moments, each moment page) | A narrated, playable film of StonkFun history: one scene per moment, with the universe time-travelling and lighting up that moment's markets. Play/pause (`space`), previous/next (`←` `→`), restart, skip to the end, skip out (`Esc`), and a clickable scene progress bar. `?from=<momentId>` starts mid-film. |
 | **Moments** | `/moments`, `/moments/:id` | Detected from data (narratives, quote rushes, launches, volume spikes, crashes, recoveries, milestones). Each opens as a constellation view with its evidence. |
 | **WHAT THE FUCK IS THIS?** | homepage, Explore → Unusual | Statistical oddities, each with the measurable reasons it was picked. |
 | **🎲 Surprise Me** | everywhere (`R`) | A weighted pick that favours interesting markets, with a slot-machine reveal and a rarity tier. |

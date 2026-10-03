@@ -5,6 +5,9 @@ import { useArchive } from '../hooks/archive';
 import { MOMENT_KIND } from '../components/MomentCard';
 import type { Moment } from '../data/types';
 import { fmtDate, fmtNum, fmtUsd } from '../lib/format';
+import { narrator } from '../lib/narrator';
+import { sceneLine } from '../engine/narration';
+import { useVoice } from '../hooks/useVoice';
 
 const DAY = 86_400_000;
 const SCENE_MS = 7000;
@@ -85,6 +88,39 @@ export function RewindPage() {
   const [activity, setActivity] = useState<{ at: number; map: Map<string, number> } | null>(null);
   const cache = useRef(new Map<number, Map<string, number>>());
   const scene = scenes[idx];
+  const voice = useVoice();
+  // true once the narrator has finished this scene's line (or voice is off)
+  const spokenRef = useRef(true);
+  // browsers only allow speech after the visitor has interacted with the page
+  const [needsTap, setNeedsTap] = useState(() => !(navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive);
+  const [speakNonce, setSpeakNonce] = useState(0);
+  useEffect(() => {
+    if (!needsTap) return;
+    const on = () => {
+      setNeedsTap(false);
+      setSpeakNonce((n) => n + 1);
+    };
+    window.addEventListener('pointerdown', on, { once: true });
+    window.addEventListener('keydown', on, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', on);
+      window.removeEventListener('keydown', on);
+    };
+  }, [needsTap]);
+
+  // voiceover: narrate each scene while playing; pausing silences it,
+  // resuming re-reads the current scene
+  useEffect(() => {
+    if (!playing || !voice.on) {
+      narrator.stop();
+      spokenRef.current = true;
+      return;
+    }
+    spokenRef.current = false;
+    narrator.speak(sceneLine(scene.kind, scene.title, scene.body, scene.moment), () => {
+      spokenRef.current = true;
+    });
+  }, [scene, playing, voice.on, speakNonce]);
 
   const go = useCallback(
     (i: number) => {
@@ -124,6 +160,7 @@ export function RewindPage() {
       const n = elapsedRef.current + (now - last);
       last = now;
       if (n < SCENE_MS) setElapsed(n);
+      else if (!spokenRef.current) setElapsed(SCENE_MS); // hold until the narrator finishes
       else if (idx < scenes.length - 1) go(idx + 1);
       else {
         setElapsed(SCENE_MS);
@@ -166,9 +203,23 @@ export function RewindPage() {
         <div className="rw-brand">
           <span className="rw-rec" /> REWIND <em>· the history of StonkFun</em>
         </div>
-        <button className="btn ghost sm" onClick={() => nav('/universe')}>
-          Skip ⏭
-        </button>
+        <div className="row gap">
+          {needsTap && voice.on && (
+            <button
+              className="btn dice sm"
+              onClick={() => {
+                setNeedsTap(false);
+                setPlaying(true);
+                setSpeakNonce((n) => n + 1);
+              }}
+            >
+              🔊 Click to hear the narration
+            </button>
+          )}
+          <button className="btn ghost sm" onClick={() => nav('/universe')}>
+            Skip ⏭
+          </button>
+        </div>
       </div>
 
       <div className="rw-caption" key={scene.id}>
@@ -236,6 +287,11 @@ export function RewindPage() {
           <button onClick={() => go(scenes.length - 1)} aria-label="Skip to the end" title="Skip to the end">
             ⏭
           </button>
+          {voice.supported && (
+            <button className={voice.on ? 'rw-voice on' : 'rw-voice'} onClick={voice.toggle} aria-label={voice.on ? 'Mute voiceover' : 'Turn on voiceover'} title={voice.on ? 'Voiceover on' : 'Voiceover off'}>
+              {voice.on ? '🔊' : '🔇'}
+            </button>
+          )}
           <span className="rw-count">
             {String(idx + 1).padStart(2, '0')} / {String(scenes.length).padStart(2, '0')}
           </span>

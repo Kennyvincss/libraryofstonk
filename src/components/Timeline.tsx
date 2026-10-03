@@ -3,20 +3,33 @@ import { Link } from 'react-router-dom';
 import { useArchive } from '../hooks/archive';
 import { fmtDate, fmtNum, fmtUsd, monthLabel } from '../lib/format';
 import { MOMENT_KIND } from './MomentCard';
+import { buildDayIndex, dayHeadline, dayLine } from '../engine/narration';
+import { narrator } from '../lib/narrator';
+import { useVoice } from '../hooks/useVoice';
 
 const DAY = 86_400_000;
+/** how long each day is held during playback at 1× */
+export const DAY_HOLD_MS = 5000;
+const SPEEDS = [1, 2, 4, 10] as const;
+const dayOf = (t: number) => Math.floor(t / DAY) * DAY;
 
 /**
  * Time travel. `value === null` means "now / live".
  * Dragging scrubs through history; the universe re-renders as it was.
  */
-export function Timeline({ value, onChange }: { value: number | null; onChange: (t: number | null) => void }) {
+export function Timeline({ value, onChange, onCaption }: { value: number | null; onChange: (t: number | null) => void; onCaption?: (line: string | null) => void }) {
   const { archive } = useArchive();
   const start = archive.meta.archiveStart;
   const end = archive.now;
   const track = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+  const voice = useVoice();
+  const facts = useMemo(() => buildDayIndex(archive), [archive]);
+  // callbacks via refs: a parent re-render must not restart the current day
+  const cbs = useRef({ onChange, onCaption });
+  cbs.current = { onChange, onCaption };
   const t = value ?? end;
   const pos = (x: number) => (x - start) / (end - start);
 
@@ -51,18 +64,60 @@ export function Timeline({ value, onChange }: { value: number | null; onChange: 
     onChange(f > 0.995 ? null : nt);
   };
 
+  // playback: one day per beat. Each day is held for DAY_HOLD_MS / speed and,
+  // when the voice is on at 1–2×, until the narrator has finished its line.
+  const day = dayOf(t);
+  const firstDay = dayOf(start);
+  const lastDay = dayOf(end);
   useEffect(() => {
     if (!playing) return;
-    const id = setInterval(() => {
-      const cur = value ?? start;
-      const next = cur + 2 * DAY;
-      if (next >= end) {
+    let alive = true;
+    let timeUp = false;
+    const waitVoice = voice.on && speed <= 2;
+    let spoken = !waitVoice;
+    const f = facts.get(day);
+    const advance = () => {
+      if (!alive || !timeUp || !spoken) return;
+      const next = day + DAY;
+      if (next > lastDay) {
         setPlaying(false);
-        onChange(null);
-      } else onChange(next);
-    }, 110);
-    return () => clearInterval(id);
-  }, [playing, value, start, end, onChange]);
+        cbs.current.onCaption?.(null);
+        cbs.current.onChange(null);
+      } else cbs.current.onChange(next + DAY / 2);
+    };
+    const line = f ? (speed <= 2 ? dayLine(archive, f) : dayHeadline(f)) : null;
+    cbs.current.onCaption?.(line);
+    if (voice.on && line) {
+      narrator.speak(line, () => {
+        spoken = true;
+        advance();
+      });
+    } else spoken = true;
+    const h = setTimeout(() => {
+      timeUp = true;
+      advance();
+    }, DAY_HOLD_MS / speed);
+    return () => {
+      alive = false;
+      clearTimeout(h);
+    };
+  }, [playing, day, speed, voice.on, facts, archive, lastDay]);
+
+  const play = () => {
+    if (playing) {
+      setPlaying(false);
+      narrator.stop();
+      onCaption?.(null);
+      return;
+    }
+    if (value === null || day >= lastDay) onChange(firstDay + DAY / 2);
+    else onChange(day + DAY / 2);
+    setPlaying(true);
+  };
+  const step = (dir: 1 | -1) => {
+    const next = Math.max(firstDay, Math.min(lastDay, day + dir * DAY));
+    onChange(next + DAY / 2);
+  };
 
   const mStart = Date.UTC(new Date(t).getUTCFullYear(), new Date(t).getUTCMonth(), 1);
   const mEnd = Date.UTC(new Date(t).getUTCFullYear(), new Date(t).getUTCMonth() + 1, 1);
@@ -99,16 +154,28 @@ export function Timeline({ value, onChange }: { value: number | null; onChange: 
         )}
       </div>
       <div className="tl-row">
-        <button className="tl-play" onClick={() => (playing ? setPlaying(false) : (value === null && onChange(start), setPlaying(true)))} aria-label={playing ? 'Pause' : 'Play history'}>
-          {playing ? '❚❚' : '▶'}
-        </button>
+        <div className="tl-transport">
+          <button className="tl-step" onClick={() => step(-1)} aria-label="Previous day" title="Previous day">
+            ◀
+          </button>
+          <button className={`tl-play ${playing ? 'on' : ''}`} onClick={play} aria-label={playing ? 'Pause' : 'Play history'} title={`Play history (${DAY_HOLD_MS / 1000 / speed}s per day)`}>
+            {playing ? '❚❚' : '▶'}
+          </button>
+          <button className="tl-step" onClick={() => step(1)} aria-label="Next day" title="Next day">
+            ▶
+          </button>
+        </div>
         <div
           className={`tl-track ${drag ? 'drag' : ''}`}
           ref={track}
           onPointerDown={(e) => {
             (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
             setDrag(true);
-            setPlaying(false);
+            if (playing) {
+              setPlaying(false);
+              narrator.stop();
+              onCaption?.(null);
+            }
             setFromX(e.clientX);
           }}
           onPointerMove={(e) => drag && setFromX(e.clientX)}
@@ -150,7 +217,15 @@ export function Timeline({ value, onChange }: { value: number | null; onChange: 
             ))}
           </div>
         </div>
-        <button className={`tl-now ${value === null ? 'on' : ''}`} onClick={() => (setPlaying(false), onChange(null))}>
+        <button className="tl-speed" onClick={() => setSpeed((v) => SPEEDS[(SPEEDS.indexOf(v) + 1) % SPEEDS.length])} title="Playback speed">
+          {speed}×<em>{DAY_HOLD_MS / 1000 / speed}s/day</em>
+        </button>
+        {voice.supported && (
+          <button className={`tl-voice ${voice.on ? 'on' : ''}`} onClick={voice.toggle} aria-label={voice.on ? 'Mute voiceover' : 'Turn on voiceover'} title={voice.on ? 'Voiceover on' : 'Voiceover off'}>
+            {voice.on ? '🔊' : '🔇'}
+          </button>
+        )}
+        <button className={`tl-now ${value === null ? 'on' : ''}`} onClick={() => (setPlaying(false), narrator.stop(), onCaption?.(null), onChange(null))}>
           NOW
         </button>
       </div>

@@ -28,6 +28,7 @@ export function UniversePage() {
   const [params, setParams] = useSearchParams();
   const tParam = params.get('t');
   const [t, setT] = useState<number | null>(tParam ? Number(tParam) : null);
+  const [caption, setCaption] = useState<string | null>(null);
   const [activity, setActivity] = useState<{ at: number; map: Map<string, number> } | null>(null);
   const [kinds, setKinds] = useState<Set<VisualKind>>(new Set());
   const [quotes, setQuotes] = useState<Set<string>>(new Set());
@@ -127,6 +128,11 @@ export function UniversePage() {
           <div className="tt-count">
             <b>{fmtNum(bornBy)}</b> markets alive in the archive
           </div>
+          {caption && (
+            <p className="tt-caption" key={caption}>
+              {caption}
+            </p>
+          )}
           {happening.map((m) => (
             <Link key={m.id} to={`/moments/${m.id}`} className={`tt-moment mk-${m.kind}`}>
               <span>{MOMENT_KIND[m.kind].glyph} Now happening</span>
@@ -203,7 +209,7 @@ export function UniversePage() {
         <LivePanel compact={window.innerWidth < 900} />
       </div>
       <div className="u-timeline">
-        <Timeline value={t} onChange={onTime} />
+        <Timeline value={t} onChange={onTime} onCaption={setCaption} />
       </div>
     </div>
   );
