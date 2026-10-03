@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { BudgetExhausted, Gecko, log } from './client';
 import { buildArchive, groupByMint, type Tracked } from './build';
 import { fetchPlatformVolume, type PlatformVolume } from './llama';
-import { classify, enumerateStockPools, fromRows, learnClmmLayout, legacyCounts, toRows, type LegacyCache, type LegacyRow } from './legacy';
+import { classify, enumerateStockPools, fromRows, learnClmmLayout, legacyCounts, legacyLaunches, toRows, type LegacyCache, type LegacyRow } from './legacy';
 import { creationTime, enumeratePools, heliusCalls, heliusEnabled, learnLayouts, pool as mapLimit, tokenMetadata, type ChainPool, type ProgramLayout, type TokenMeta } from './helius';
 import { NETWORK, num, parseOhlcv, poolToRecord, tokenMap, type GtList, type GtPool, type GtToken, type Ohlcv, type PoolRecord, type QuoteRef } from '../src/data/live/gecko';
 import { CRYPTO_QUOTE_SPECS, EXCLUDED_MINTS, QUOTE_SPECS, specToQuote } from '../src/data/live/quotes';
@@ -231,7 +231,7 @@ async function chainPhase(state: State, gt: Gecko, stocks: Map<string, QuoteRef 
 
   // token metadata (names, symbols, images)
   const tokenOf = (p: ChainPool) => (stockMints.has(p.baseMint) || CRYPTO.quotes.has(p.baseMint) ? p.quoteMint : p.baseMint);
-  const legacyTokens = Object.values(chain.legacyCache?.pools ?? {}).filter((p) => p.launch === 1).map((p) => p.token);
+  const legacyTokens = (chain.legacyCache ? legacyLaunches(chain.legacyCache, STONKFUN.launch, STONKFUN.launchlab) : []).map((p) => p.token);
   const needMeta = [...new Set([...legacyTokens, ...Object.values(chain.pools).map(tokenOf)])].filter((m) => !chain.meta[m]).slice(0, 20_000);
   if (needMeta.length) {
     const meta = await tokenMetadata(needMeta);
@@ -263,13 +263,11 @@ async function legacyPhase(state: State, stockMints: Set<string>, now: number) {
     cache.enumeratedAt = now;
     log(`legacy: ${found.length} stock-quoted CLMM pools on-chain`);
   }
-  await classify(cache, STONKFUN.launch, STONKFUN.launchlab, LEGACY_MINUTES);
+  await classify(cache, LEGACY_MINUTES);
   const c = legacyCounts(cache, STONKFUN.launch, STONKFUN.launchlab);
   chain.legacy = { byDay: c.byDay, total: c.total, countedAt: now, complete: c.pending === 0 && c.total > 0 };
   log(
-    `legacy: ${c.total} launches Aug 3 – Sept 5 (one-transaction mint + CLMM pool)` +
-      (c.pending ? `, ${c.pending} pools still to check` : '') +
-      (c.topSigners.length ? ` · top signers ${c.topSigners.map(([w, n]) => `${w.slice(0, 6)}…×${n}`).join(', ')}` : ''),
+    `legacy: ${c.total} launches Aug 3 – Sept 5 (coin-vs-stock CLMM pools)` + (c.pending ? `, ${c.pending} pools still to date` : ''),
   );
 }
 
@@ -279,8 +277,7 @@ function legacyRecords(state: State, stocks: Map<string, QuoteRef>, now: number)
   const cache = chain?.legacyCache;
   if (!cache) return [];
   const out: PoolRecord[] = [];
-  for (const p of Object.values(cache.pools)) {
-    if (p.launch !== 1 || !p.createdAt) continue;
+  for (const p of legacyLaunches(cache, STONKFUN.launch, STONKFUN.launchlab)) {
     const q = stocks.get(p.quoteMint);
     if (!q) continue;
     const gt = state.pools[p.address];
@@ -294,7 +291,7 @@ function legacyRecords(state: State, stocks: Map<string, QuoteRef>, now: number)
     out.push({
       address: p.address,
       dexId: 'stonkfun-legacy',
-      createdAt: p.createdAt,
+      createdAt: p.createdAt!,
       mint: p.token,
       symbol,
       name: meta.name || symbol,
@@ -318,7 +315,7 @@ async function chainStats(gt: Gecko, state: State, now: number, maxCalls: number
   const chain = state.chain;
   if (!chain) return;
   const known = new Set(Object.values(state.pools).map((p) => p.mint));
-  const legacyTokens = Object.values(chain.legacyCache?.pools ?? {}).filter((p) => p.launch === 1).map((p) => p.token);
+  const legacyTokens = (chain.legacyCache ? legacyLaunches(chain.legacyCache, STONKFUN.launch, STONKFUN.launchlab) : []).map((p) => p.token);
   const mints = [...new Set([...legacyTokens, ...Object.values(chain.pools).map((p) => p.baseMint)])].filter((m) => !known.has(m) && chain.meta[m] !== undefined);
   mints.sort((a, b) => (chain.stats[a]?.observedAt ?? 0) - (chain.stats[b]?.observedAt ?? 0));
   let calls = 0;

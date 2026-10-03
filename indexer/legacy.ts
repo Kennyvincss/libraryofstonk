@@ -10,7 +10,7 @@
  * Results are cached; history is fixed, so later runs only top up.
  */
 import { log } from './client';
-import { b58decode, b58encode, creationTx, getAccounts, pool as mapLimit, programAccounts, transactionLogs } from './helius';
+import { b58decode, b58encode, creationTx, getAccounts, pool as mapLimit, programAccounts } from './helius';
 
 export interface LegacyLayout {
   program: string;
@@ -96,61 +96,52 @@ export async function enumerateStockPools(l: LegacyLayout, stockMints: Set<strin
  * Date the pools, then check the creation transaction of those created in the
  * pre-LaunchLab window. Time-boxed; resumes on the next run.
  */
-export async function classify(cache: LegacyCache, from: number, to: number, minutes: number) {
+/** createdAt sentinel: busy pool whose oldest signature stayed out of reach */
+const GAVE_UP = 1;
+
+/** Date the pools by their oldest signature. Time-boxed; resumes on the next run. */
+export async function classify(cache: LegacyCache, minutes: number) {
   const stopAt = Date.now() + minutes * 60_000;
-  const check = async (p: LegacyPool) => {
-    const tx = await transactionLogs(p.sig!);
-    if (!tx) {
-      p.launch = 0;
-      delete p.sig;
-      return;
-    }
-    const mintInit = tx.logs.some((x) => /Instruction: InitializeMint/.test(x));
-    const poolInit = tx.logs.some((x) => /Instruction: (CreatePool|OpenPosition)/.test(x));
-    p.launch = mintInit && poolInit && tx.accounts.includes(p.token) ? 1 : 0;
-    p.signer = tx.signers[0];
-    delete p.sig;
-  };
-  // finish half-done pools first, then date + check the rest in one pass
+  // undated first; busy pools (0) get one deeper look afterwards
   const todo = Object.values(cache.pools)
-    .filter((p) => p.createdAt === undefined || (p.sig && p.launch === undefined))
-    .sort((a, b) => Number(!!b.sig) - Number(!!a.sig));
+    .filter((p) => p.createdAt === undefined || p.createdAt === 0)
+    .sort((a, b) => Number(a.createdAt === 0) - Number(b.createdAt === 0));
   let dated = 0;
-  let checked = 0;
   await mapLimit(todo, 6, async (p) => {
     if (Date.now() > stopAt) return;
     try {
-      if (p.createdAt === undefined) {
-        const c = await creationTx(p.address, 5);
-        p.createdAt = c?.t ?? 0;
-        if (c && c.t >= from - DAY && c.t < to + DAY) p.sig = c.signature;
-        dated++;
-      }
-      if (p.sig && p.launch === undefined) {
-        await check(p);
-        checked++;
-      }
+      const deep = p.createdAt === 0;
+      const c = await creationTx(p.address, deep ? 40 : 5);
+      p.createdAt = c?.t ?? (deep ? GAVE_UP : 0);
+      if (c) dated++;
     } catch (e) {
       log(`legacy: ${p.address}: ${(e as Error).message}`);
     }
   });
-  log(`legacy: dated ${dated}, checked ${checked} creation transactions (${todo.length} pools were pending)`);
+  log(`legacy: dated ${dated} of ${todo.length} pending pools`);
+}
+
+/** Each coin's first coin-vs-stock pool created in [from, to). */
+export function legacyLaunches(cache: LegacyCache, from: number, to: number): LegacyPool[] {
+  const first = new Map<string, LegacyPool>();
+  for (const p of Object.values(cache.pools)) {
+    if (!p.createdAt || p.createdAt === GAVE_UP || p.createdAt < from || p.createdAt >= to) continue;
+    const cur = first.get(p.token);
+    if (!cur || p.createdAt < cur.createdAt!) first.set(p.token, p);
+  }
+  return [...first.values()];
 }
 
 /** Launches per UTC day in [from, to). */
 export function legacyCounts(cache: LegacyCache, from: number, to: number) {
   const byDay: Record<string, number> = {};
-  let total = 0;
-  const signers = new Map<string, number>();
-  for (const p of Object.values(cache.pools)) {
-    if (p.launch !== 1 || !p.createdAt || p.createdAt < from || p.createdAt >= to) continue;
-    const d = String(Math.floor(p.createdAt / DAY) * DAY);
+  const launches = legacyLaunches(cache, from, to);
+  for (const p of launches) {
+    const d = String(Math.floor(p.createdAt! / DAY) * DAY);
     byDay[d] = (byDay[d] ?? 0) + 1;
-    total++;
-    if (p.signer) signers.set(p.signer, (signers.get(p.signer) ?? 0) + 1);
   }
-  const pending = Object.values(cache.pools).filter((p) => p.createdAt === undefined || (p.sig && p.launch === undefined)).length;
-  return { byDay, total, pending, topSigners: [...signers].sort((a, b) => b[1] - a[1]).slice(0, 5) };
+  const pending = Object.values(cache.pools).filter((p) => p.createdAt === undefined || p.createdAt === 0).length;
+  return { byDay, total: launches.length, pending };
 }
 
 // compact cache rows: [address, token, quote, createdSec (-1 undated), launch (-1 unchecked), sig, signer]
