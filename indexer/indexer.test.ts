@@ -109,6 +109,15 @@ describe('archive build', () => {
     expect(built.activity.rows.PoolA.length).toBe(1 + 33);
   });
 
+  test('merges a token’s pools (bonding curve + graduated AMM) into one market', () => {
+    const second = { ...recs[0], address: 'PoolA2', dexId: 'raydium', vol24: 12000, reserveUsd: 100, tx24: 50 };
+    const b = buildArchive([recs[0], second], new Map(), {}, [], NOW);
+    expect(b.markets.length).toBe(1);
+    expect(b.markets[0].id).toBe('PoolA');
+    expect(b.markets[0].volume24hUsd).toBe(100000);
+    expect(b.markets[0].trades24h).toBe(550);
+  });
+
   test('the site engine accepts the built dataset', () => {
     const a = new Archive(built.meta, built.markets, built.ecosystem);
     expect(a.markets.length).toBe(2);

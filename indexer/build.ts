@@ -26,6 +26,54 @@ export interface BuiltArchive {
   activity: Activity;
 }
 
+/**
+ * A token can have several pools (bonding curve, then the AMM it graduates
+ * to, sometimes more than one quote). One market per token: the busiest pool
+ * is primary, volumes and counts are summed across its pools.
+ */
+export function groupByMint(records: PoolRecord[]): { primary: PoolRecord; pools: PoolRecord[] }[] {
+  const by = new Map<string, PoolRecord[]>();
+  for (const r of records) {
+    const arr = by.get(r.mint) ?? [];
+    arr.push(r);
+    by.set(r.mint, arr);
+  }
+  const weight = (r: PoolRecord) => (r.vol24 ?? 0) + (r.reserveUsd ?? 0) * 0.5;
+  return [...by.values()].map((pools) => {
+    const sorted = [...pools].sort((a, b) => weight(b) - weight(a));
+    return { primary: sorted[0], pools: sorted };
+  });
+}
+
+function mergePools(g: { primary: PoolRecord; pools: PoolRecord[] }): PoolRecord {
+  if (g.pools.length === 1) return g.primary;
+  const sum = (f: (r: PoolRecord) => number | undefined) => g.pools.reduce((s, r) => s + (f(r) ?? 0), 0);
+  return {
+    ...g.primary,
+    createdAt: Math.min(...g.pools.map((r) => r.createdAt)),
+    vol24: sum((r) => r.vol24),
+    tx24: sum((r) => r.tx24),
+    buyers24: sum((r) => r.buyers24),
+    sellers24: sum((r) => r.sellers24),
+    reserveUsd: sum((r) => r.reserveUsd),
+  };
+}
+
+/** Daily bars across a token's pools: prices from the primary, volume summed. */
+function mergeBars(g: { primary: PoolRecord; pools: PoolRecord[] }, bars: Map<string, Ohlcv[]>): Ohlcv[] {
+  const out = new Map<number, Ohlcv>();
+  for (const r of g.pools) {
+    const isPrimary = r === g.primary;
+    for (const b of bars.get(r.address) ?? []) {
+      const cur = out.get(b[0]);
+      if (!cur) out.set(b[0], [...b] as Ohlcv);
+      else if (isPrimary) out.set(b[0], [b[0], b[1], b[2], b[3], b[4], b[5] + cur[5]]);
+      else cur[5] += b[5];
+    }
+  }
+  return [...out.values()].sort((a, b) => a[0] - b[0]);
+}
+
 export function buildMarket(r: PoolRecord, bars: Ohlcv[], tracked: Tracked[string] | undefined, now: number): Market {
   const price = r.priceUsd ?? (bars.length ? bars[bars.length - 1][4] : 0);
   let ath = price;
@@ -73,7 +121,7 @@ export function buildMarket(r: PoolRecord, bars: Ohlcv[], tracked: Tracked[strin
 
   let status: MarketStatus = /launchlab|bonding/i.test(r.dexId ?? '') ? 'bonding' : 'graduated';
   if (now - lastTradeAt > 3 * DAY) status = 'dead';
-  else if (v7 < 40 && now - r.createdAt > 7 * DAY) status = 'dormant';
+  else if (Math.max(v7, vol24) < 40 && now - r.createdAt > 7 * DAY) status = 'dormant';
 
   return {
     id: r.address,
@@ -106,8 +154,22 @@ export function buildMarket(r: PoolRecord, bars: Ohlcv[], tracked: Tracked[strin
   };
 }
 
-export function buildArchive(records: PoolRecord[], bars: Map<string, Ohlcv[]>, tracked: Tracked, quotes: QuoteAsset[], now: number): BuiltArchive {
-  const markets = records.map((r) => buildMarket(r, bars.get(r.address) ?? [], tracked[r.address], now));
+export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number): BuiltArchive {
+  const groups = groupByMint(records);
+  // per token: tracked counts summed across its pools, bars merged, keyed by primary pool
+  const tracked: Tracked = {};
+  const bars = new Map<string, Ohlcv[]>();
+  for (const g of groups) {
+    const t: Tracked[string] = {};
+    for (const r of g.pools)
+      for (const [d, v] of Object.entries(poolTracked[r.address] ?? {})) {
+        const cur = t[d] ?? { traders: 0, trades: 0 };
+        t[d] = { traders: cur.traders + v.traders, trades: cur.trades + v.trades };
+      }
+    tracked[g.primary.address] = t;
+    bars.set(g.primary.address, mergeBars(g, poolBars));
+  }
+  const markets = groups.map((g) => buildMarket(mergePools(g), bars.get(g.primary.address) ?? [], tracked[g.primary.address], now));
   const start = dayOf(Math.min(now, ...markets.map((m) => m.createdAt)));
   const days = Math.max(1, Math.floor((dayOf(now) - start) / DAY) + 1);
 

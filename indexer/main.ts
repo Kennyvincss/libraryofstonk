@@ -18,7 +18,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { BudgetExhausted, Gecko, log } from './client';
-import { buildArchive, type Tracked } from './build';
+import { buildArchive, groupByMint, type Tracked } from './build';
 import { NETWORK, num, parseOhlcv, poolToRecord, tokenMap, type GtList, type GtPool, type GtToken, type Ohlcv, type PoolRecord, type QuoteRef } from '../src/data/live/gecko';
 import { EXCLUDED_MINTS, QUOTE_SPECS, specToQuote } from '../src/data/live/quotes';
 import type { QuoteAsset } from '../src/data/types';
@@ -33,6 +33,7 @@ interface State {
   tracked: Tracked;
   history: Record<string, { fetchedAt: number }>;
   lastDeepDiscovery: Record<string, number>;
+  lastShallowDiscovery?: Record<string, number>;
 }
 
 const args = process.argv.slice(2);
@@ -41,6 +42,8 @@ const BUDGET = Number(process.env.INDEXER_MAX_CALLS || 600);
 const PAGES = Number(process.env.INDEXER_POOL_PAGES || 10);
 /** quotes that get full (10-page) discovery per run; the rest get page 1 */
 const DEEP_PER_RUN = Number(process.env.INDEXER_DEEP_QUOTES_PER_RUN || 3);
+/** quotes whose busiest page is refreshed per run (rotating); new_pools covers launches every run */
+const SHALLOW_PER_RUN = Number(process.env.INDEXER_SHALLOW_QUOTES_PER_RUN || 8);
 
 async function readJson<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -146,14 +149,14 @@ async function main() {
     }
     // the free API is tight (~10 calls/min from CI), so deep discovery rotates:
     // a few quotes get all pages each run, the rest just their busiest page
-    const deepSet = new Set(
-      [...quotes.values()]
-        .sort((a, b) => (state.lastDeepDiscovery[a.symbol] ?? 0) - (state.lastDeepDiscovery[b.symbol] ?? 0))
-        .slice(0, DEEP_PER_RUN)
-        .map((q) => q.symbol),
-    );
+    state.lastShallowDiscovery ??= {};
+    const byAge = (m: Record<string, number>) => [...quotes.values()].sort((a, b) => (m[a.symbol] ?? 0) - (m[b.symbol] ?? 0));
+    const deepSet = new Set(byAge(state.lastDeepDiscovery).slice(0, DEEP_PER_RUN).map((q) => q.symbol));
+    const shallowSet = new Set(byAge(state.lastShallowDiscovery).filter((q) => !deepSet.has(q.symbol)).slice(0, SHALLOW_PER_RUN).map((q) => q.symbol));
     for (const q of quotes.values()) {
       const deep = deepSet.has(q.symbol);
+      if (!deep && !shallowSet.has(q.symbol)) continue;
+      state.lastShallowDiscovery[q.symbol] = now;
       const pages = deep ? PAGES : 1;
       let found = 0;
       for (let page = 1; page <= pages; page++) {
@@ -177,7 +180,8 @@ async function main() {
     }
 
     // history: new markets get full daily OHLCV, active ones a short top-up
-    const pools = Object.values(state.pools);
+    // one history per token: its primary pool
+    const pools = groupByMint(Object.values(state.pools)).map((g) => g.primary);
     const queue = [
       ...pools.filter((p) => !state.history[p.address]).sort((a, b) => (b.vol24 ?? 0) - (a.vol24 ?? 0)),
       ...pools
