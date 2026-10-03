@@ -69,7 +69,7 @@ async function rpc<T>(method: string, params: unknown): Promise<T> {
         signal: AbortSignal.timeout(method === 'getProgramAccounts' ? 180_000 : 30_000),
       });
       if (res.status === 429 || res.status >= 500) {
-        await sleep(1000 * 2 ** attempt);
+        await sleep(1500 * 2 ** attempt + Math.random() * 500);
         continue;
       }
       const j = (await res.json()) as { result?: T; error?: { message: string } };
@@ -94,6 +94,13 @@ export interface ProgramLayout {
   dataSize: number;
   baseOff: number;
   quoteOff: number;
+  /**
+   * Shared launch programs (Raydium LaunchLab hosts many launchpads) mark each
+   * pool with its platform. When learned, enumeration filters on these values.
+   */
+  platform?: { offset: number; values: string[] };
+  /** program also hosts other launchpads' pools (never enumerate it unfiltered) */
+  shared: boolean;
 }
 
 export interface ChainPool {
@@ -114,50 +121,87 @@ const findAll = (hay: Uint8Array, needle: Uint8Array): number[] => {
 };
 
 /**
- * Learn each program's pool layout from known pools.
- * `samples` = known pool addresses with their token mint, quote mint and kind.
+ * Learn pool layouts from known pools.
+ *  positives: pools GeckoTerminal labels as StonkFun (with their mints)
+ *  negatives: pools of other launchpads (used to find StonkFun's platform marker)
  */
-export async function learnLayouts(samples: { address: string; mint: string; quoteMint: string; kind: 'stonkfun' | 'launchlab' }[]): Promise<ProgramLayout[]> {
-  const layouts: ProgramLayout[] = [];
-  for (const kind of ['stonkfun', 'launchlab'] as const) {
-    const s = samples.filter((x) => x.kind === kind).slice(0, 25);
-    if (s.length < 2) {
-      log(`helius: not enough known ${kind} pools to learn its layout (${s.length})`);
-      continue;
-    }
-    const res = await rpc<{ value: (AccountInfo | null)[] }>('getMultipleAccounts', [s.map((x) => x.address), { encoding: 'base64' }]);
-    // votes: program → "size:baseOff:quoteOff" → count
-    const votes = new Map<string, Map<string, number>>();
-    res.value.forEach((acc, i) => {
-      if (!acc) return;
-      const data = Buffer.from(acc.data[0], 'base64');
-      const bo = findAll(data, b58decode(s[i].mint));
-      const qo = findAll(data, b58decode(s[i].quoteMint));
-      if (bo.length !== 1 || qo.length !== 1) return;
-      const key = `${data.length}:${bo[0]}:${qo[0]}`;
-      const m = votes.get(acc.owner) ?? new Map<string, number>();
-      m.set(key, (m.get(key) ?? 0) + 1);
-      votes.set(acc.owner, m);
-    });
-    let best: { program: string; key: string; n: number } | undefined;
-    for (const [program, m] of votes) for (const [key, n] of m) if (!best || n > best.n) best = { program, key, n };
-    if (!best || best.n < 2) {
-      log(`helius: could not learn the ${kind} pool layout (owners: ${[...votes.keys()].join(', ') || 'none'})`);
-      continue;
-    }
-    const [dataSize, baseOff, quoteOff] = best.key.split(':').map(Number);
-    layouts.push({ program: best.program, kind, dataSize, baseOff, quoteOff });
-    log(`helius: ${kind} program ${best.program} · pool size ${dataSize} · base@${baseOff} quote@${quoteOff} (${best.n}/${s.length} samples agree)`);
+export async function learnLayouts(
+  positives: { address: string; mint: string; quoteMint: string }[],
+  negatives: string[],
+): Promise<ProgramLayout[]> {
+  if (positives.length < 2) {
+    log(`helius: not enough known StonkFun pools to learn the layout (${positives.length})`);
+    return [];
   }
+  const pos = positives.slice(0, 60);
+  const neg = negatives.slice(0, 60);
+  const res = await rpc<{ value: (AccountInfo | null)[] }>('getMultipleAccounts', [[...pos, ...neg.map((a) => ({ address: a }))].map((x) => x.address), { encoding: 'base64' }]);
+  const posAcc = res.value.slice(0, pos.length);
+  const negAcc = res.value.slice(pos.length);
+
+  // group positives by owner program + agreeing (size, baseOff, quoteOff)
+  const groups = new Map<string, { owner: string; size: number; baseOff: number; quoteOff: number; datas: Uint8Array[] }>();
+  posAcc.forEach((acc, i) => {
+    if (!acc) return;
+    const data = Buffer.from(acc.data[0], 'base64');
+    const bo = findAll(data, b58decode(pos[i].mint));
+    const qo = findAll(data, b58decode(pos[i].quoteMint));
+    if (bo.length !== 1 || qo.length !== 1) return;
+    const key = `${acc.owner}:${data.length}:${bo[0]}:${qo[0]}`;
+    const g = groups.get(key) ?? { owner: acc.owner, size: data.length, baseOff: bo[0], quoteOff: qo[0], datas: [] };
+    g.datas.push(data);
+    groups.set(key, g);
+  });
+
+  const layouts: ProgramLayout[] = [];
+  for (const g of groups.values()) {
+    if (g.datas.length < 2) continue;
+    const negSame = negAcc.filter((a): a is AccountInfo => !!a && a.owner === g.owner).map((a) => Buffer.from(a.data[0], 'base64')).filter((d) => d.length === g.size);
+    const shared = negSame.length > 0;
+    let platform: ProgramLayout['platform'];
+    if (shared) {
+      // a 32-byte field whose few values cover every StonkFun pool and (almost) no other pool
+      const skip = (o: number) => Math.abs(o - g.baseOff) < 32 || Math.abs(o - g.quoteOff) < 32;
+      let best: { offset: number; values: string[]; score: number } | undefined;
+      for (let o = 8; o + 32 <= g.size; o++) {
+        if (skip(o)) continue;
+        const vals = new Map<string, number>();
+        for (const d of g.datas) {
+          const v = b58encode(d.subarray(o, o + 32));
+          vals.set(v, (vals.get(v) ?? 0) + 1);
+        }
+        if (vals.size > 3) continue;
+        const values = [...vals.keys()];
+        if (values.some((v) => /^1+$/.test(v))) continue; // all-zero field
+        const negHits = negSame.filter((d) => vals.has(b58encode(d.subarray(o, o + 32)))).length;
+        if (negHits > negSame.length * 0.1) continue;
+        // overlapping windows also separate the sets; a real pubkey has no zero padding
+        const zeros = g.datas[0].subarray(o, o + 32).reduce((n, b) => n + (b === 0 ? 1 : 0), 0);
+        const score = vals.size * 10 + negHits + zeros / 100;
+        if (!best || score < best.score) best = { offset: o, values, score };
+      }
+      if (best) platform = { offset: best.offset, values: best.values };
+    }
+    layouts.push({ program: g.owner, kind: platform || !shared ? 'stonkfun' : 'launchlab', dataSize: g.size, baseOff: g.baseOff, quoteOff: g.quoteOff, platform, shared });
+    log(
+      `helius: program ${g.owner} · pool size ${g.size} · base@${g.baseOff} quote@${g.quoteOff} · ${g.datas.length} StonkFun samples · ` +
+        (shared ? (platform ? `shared with other launchpads (${negSame.length} negatives); StonkFun marker @${platform.offset} = ${platform.values.join(', ')}` : `shared with other launchpads (${negSame.length} negatives) and no StonkFun marker found — stock-quoted pools only`) : 'dedicated to StonkFun'),
+    );
+  }
+  if (!layouts.length) log('helius: could not learn any StonkFun pool layout');
   return layouts;
 }
 
-/** Every pool of a program (optionally only those quoted in `quoteMint`). */
-export async function enumeratePools(l: ProgramLayout, quoteMint?: string): Promise<ChainPool[]> {
+/**
+ * Pools of a program matching `memcmp` (platform marker or quote mint).
+ * A shared program is never enumerated without a filter.
+ */
+export async function enumeratePools(l: ProgramLayout, memcmp?: { offset: number; bytes: string }): Promise<ChainPool[]> {
+  if (l.shared && !memcmp) throw new Error('refusing to enumerate a shared launch program without a filter');
   const lo = Math.min(l.baseOff, l.quoteOff);
   const hi = Math.max(l.baseOff, l.quoteOff) + 32;
   const filters: unknown[] = [{ dataSize: l.dataSize }];
-  if (quoteMint) filters.push({ memcmp: { offset: l.quoteOff, bytes: quoteMint } });
+  if (memcmp) filters.push({ memcmp });
   const res = await rpc<{ pubkey: string; account: AccountInfo }[]>('getProgramAccounts', [
     l.program,
     { encoding: 'base64', dataSlice: { offset: lo, length: hi - lo }, filters },

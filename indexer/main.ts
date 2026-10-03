@@ -154,42 +154,53 @@ function ingest(state: State, list: GtList<GtPool> | null, quotes: Map<string, Q
 const CHAIN_NEW_PER_RUN = Number(process.env.INDEXER_CHAIN_NEW_PER_RUN || 4000);
 
 /** Enumerate every StonkFun pool on-chain (Helius) and fill in metadata + creation times. */
-async function chainPhase(state: State, stocks: Map<string, QuoteRef & { priceUsd: number }>, now: number) {
+async function chainPhase(state: State, gt: Gecko, stocks: Map<string, QuoteRef & { priceUsd: number }>, now: number) {
   const chain = (state.chain ??= { layouts: [], layoutsAt: 0, pools: {}, meta: {}, stats: {} });
   const stockMints = new Set(stocks.keys());
-  if (!chain.layouts.length || now - chain.layoutsAt > 7 * DAY) {
-    const samples = Object.values(state.pools)
-      .map((p) => {
-        if (p.dexId === 'stonkfun') return { address: p.address, mint: p.mint, quoteMint: p.quoteMint, kind: 'stonkfun' as const };
-        if (p.dexId === 'raydium-launchlab' && stockMints.has(p.quoteMint) && p.createdAt >= STONKFUN.launchlab - DAY) return { address: p.address, mint: p.mint, quoteMint: p.quoteMint, kind: 'launchlab' as const };
-        return null;
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null)
-      .sort((a, b) => (state.pools[b.address].vol24 ?? 0) - (state.pools[a.address].vol24 ?? 0));
-    const learned = await learnLayouts(samples);
+  // relearn weekly, or when the cached layouts predate shared-program detection
+  if (!chain.layouts.length || now - chain.layoutsAt > 7 * DAY || chain.layouts.some((l) => l.shared === undefined)) {
+    // StonkFun pools GeckoTerminal knows, spread across time (old and new)
+    const known = Object.values(state.pools)
+      .filter((p) => p.dexId === 'stonkfun')
+      .sort((a, b) => a.createdAt - b.createdAt);
+    const step = Math.max(1, Math.floor(known.length / 60));
+    const positives = known.filter((_, i) => i % step === 0).map((p) => ({ address: p.address, mint: p.mint, quoteMint: p.quoteMint }));
+    // other launchpads on the same infrastructure, as negatives
+    const negatives: string[] = [];
+    for (const dex of ['letsbonk-fun', 'raydium-launchlab']) {
+      const res = await gt.get<GtList<GtPool>>(`/networks/${NETWORK}/dexes/${dex}/pools?page=1`);
+      for (const p of res?.data ?? []) negatives.push(p.attributes.address);
+    }
+    const learned = await learnLayouts(positives, negatives);
     if (learned.length) {
       chain.layouts = learned;
       chain.layoutsAt = now;
+      chain.pools = {}; // re-enumerate with the new filters
     }
   }
-  let found = 0;
+  const found: ChainPool[] = [];
   for (const l of chain.layouts) {
-    const lists = l.kind === 'stonkfun' ? [await enumeratePools(l)] : await Promise.all([...stockMints].map((m) => enumeratePools(l, m)));
-    for (const cp of lists.flat()) {
-      found++;
-      const prev = chain.pools[cp.address];
-      chain.pools[cp.address] = { ...cp, createdAt: prev?.createdAt };
-    }
+    if (l.platform) for (const v of l.platform.values) found.push(...(await enumeratePools(l, { offset: l.platform.offset, bytes: v })));
+    else if (l.shared) for (const m of stockMints) found.push(...(await enumeratePools(l, { offset: l.quoteOff, bytes: m })));
+    else found.push(...(await enumeratePools(l)));
   }
+  // sanity: StonkFun is big, but not "every pool on a shared launch program" big
+  const MAX_POOLS = Number(process.env.INDEXER_MAX_CHAIN_POOLS || 250_000);
+  if (found.length > MAX_POOLS) {
+    log(`helius: ${found.length} pools exceeds the sanity limit (${MAX_POOLS}); the filter is probably wrong — ignoring this enumeration`);
+    chain.layoutsAt = 0;
+    return;
+  }
+  for (const cp of found) chain.pools[cp.address] = { ...cp, createdAt: chain.pools[cp.address]?.createdAt };
   chain.enumeratedAt = now;
-  log(`helius: ${found} StonkFun pools on-chain (${Object.keys(chain.pools).length} known)`);
+  log(`helius: ${found.length} StonkFun pools on-chain (${Object.keys(chain.pools).length} known)`);
 
   // creation times for new pools
   const missing = Object.values(chain.pools).filter((p) => !p.createdAt).slice(0, CHAIN_NEW_PER_RUN);
   let done = 0;
   // creation-time backfill gets at most 40% of the run; the rest continues next run
   const stopAt = Date.now() + Number(process.env.INDEXER_MAX_MINUTES || 30) * 60_000 * 0.4;
-  await mapLimit(missing, 6, async (p) => {
+  await mapLimit(missing, 3, async (p) => {
     if (Date.now() > stopAt) return;
     try {
       p.createdAt = await creationTime(p.address);
@@ -202,7 +213,7 @@ async function chainPhase(state: State, stocks: Map<string, QuoteRef & { priceUs
 
   // token metadata (names, symbols, images)
   const tokenOf = (p: ChainPool) => (stockMints.has(p.baseMint) || CRYPTO.quotes.has(p.baseMint) ? p.quoteMint : p.baseMint);
-  const needMeta = [...new Set(Object.values(chain.pools).map(tokenOf))].filter((m) => !chain.meta[m]);
+  const needMeta = [...new Set(Object.values(chain.pools).map(tokenOf))].filter((m) => !chain.meta[m]).slice(0, 20_000);
   if (needMeta.length) {
     const meta = await tokenMetadata(needMeta);
     for (const m of needMeta) chain.meta[m] = meta.get(m) ?? {};
@@ -352,7 +363,7 @@ async function main() {
     // complete enumeration from chain state when a Helius key is configured
     if (heliusEnabled()) {
       try {
-        await chainPhase(state, quotes, now);
+        await chainPhase(state, gt, quotes, now);
         await chainStats(gt, state, now, Math.floor(gt.remaining * 0.4));
       } catch (e) {
         if (e instanceof BudgetExhausted) throw e;
