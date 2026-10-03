@@ -190,8 +190,9 @@ kbd {
   color: var(--acid);
 }
 .btn.dice {
-  background: linear-gradient(120deg, rgba(255, 79, 163, 0.18), rgba(160, 123, 255, 0.18));
+  background: linear-gradient(120deg, rgba(255, 79, 163, 0.18), rgba(160, 123, 255, 0.18)), rgba(7, 6, 15, 0.85);
   border-color: rgba(255, 79, 163, 0.5);
+  backdrop-filter: blur(8px);
 }
 .btn.dice:hover {
   box-shadow: 0 0 30px -4px rgba(255, 79, 163, 0.6);
@@ -691,4 +692,14 @@ kbd {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+.btn.outline {
+  background: rgba(5, 4, 11, 0.8);
+  border-color: var(--acid);
+  color: var(--acid);
+  backdrop-filter: blur(8px);
+}
+.btn.outline:hover {
+  background: rgba(212, 255, 58, 0.1);
+  box-shadow: 0 0 30px -8px rgba(212, 255, 58, 0.6);
 }

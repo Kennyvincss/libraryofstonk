@@ -36,7 +36,16 @@ export function Home() {
           </h1>
           <p className="hero-sub">Explore the markets, moments and madness of StonkFun.</p>
           <div className="hero-cta">
-            <Link to="/universe" className="btn primary lg">
+            <Link to="/rewind" className="btn primary lg rewind-cta">
+              <span className="rw-cta-ico" aria-hidden>
+                ▶
+              </span>
+              <span className="rw-cta-text">
+                Watch the rewind
+                <em>{archive.publicMoments.length + 2} scenes · narrated</em>
+              </span>
+            </Link>
+            <Link to="/universe" className="btn outline lg">
               Enter the universe
             </Link>
             <button className="btn dice lg" onClick={openSurprise}>
@@ -46,9 +55,6 @@ export function Home() {
               Surprise me
             </button>
           </div>
-          <Link to="/rewind" className="rewind-link">
-            <span className="rw-play-ico">▶</span> Watch the rewind <em>· StonkFun history in {archive.publicMoments.length + 2} scenes</em>
-          </Link>
           <div className="hero-hint">drag to wander · pinch or ctrl+scroll to zoom · click any star</div>
         </div>
         <Link to={`/market/${daily.id}`} className="daily">
