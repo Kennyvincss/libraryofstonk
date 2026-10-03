@@ -126,7 +126,7 @@ export function UniversePage() {
         <div className="tt-overlay" aria-live="polite">
           <div className="tt-date">{fmtDate(t)}</div>
           <div className="tt-count">
-            <b>{fmtNum(bornBy)}</b> markets alive in the archive
+            <b>{fmtNum(bornBy)}</b> {archive.tracked}markets in the archive
           </div>
           {caption && (
             <p className="tt-caption" key={caption}>

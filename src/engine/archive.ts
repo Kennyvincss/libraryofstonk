@@ -63,7 +63,7 @@ export class Archive {
   readonly now: number;
   readonly notability: NotabilityResult;
   readonly badges: Map<string, BadgeAward[]>;
-  readonly moments: Moment[];
+  moments: Moment[];
   /** approved moments, newest first */
   readonly publicMoments: Moment[];
   readonly momentsByMarket: Map<string, Moment[]>;
@@ -95,6 +95,7 @@ export class Archive {
     const detected = sourceMoments ?? detectMoments({ markets, ecosystem, score: (i) => first.score[i], start: meta.archiveStart });
     const curated = meta.isDemo ? [] : knownMoments(markets, meta.archiveStart, meta.archiveEnd, (id) => first.score[this.idx.get(id) ?? 0] ?? 0);
     this.moments = applyCuration([...curated, ...detected.filter((d) => !curated.some((c) => c.id === d.id))]);
+    if (meta.coverage === 'partial') this.moments = this.moments.filter((m) => !(m.kind === 'milestone' && m.key.endsWith('-markets')));
     this.publicMoments = this.moments.filter((m) => m.status === 'approved').sort((a, b) => b.start - a.start);
     this.momentsByMarket = new Map();
     const counts = new Map<string, number>();
@@ -135,6 +136,16 @@ export class Archive {
     this.interest = new Float64Array(markets.length);
     markets.forEach((_, i) => (this.interest[i] = this.reasonsAt(i).slice(0, 3).reduce((s, r) => s + r.strength, 0)));
     this.kind = markets.map((m, i) => this.classify(m, i));
+  }
+
+  /** "tracked" when the market list isn't every market ever launched */
+  get tracked(): string {
+    return this.meta.coverage === 'partial' ? 'tracked ' : '';
+  }
+  /** platform-wide volume: authoritative source if present, else the daily series, else market totals */
+  get totalVolume(): number {
+    const eco = this.ecosystem.reduce((s, d) => s + d.volumeUsd, 0);
+    return this.meta.platform?.volumeAllTime ?? Math.max(eco, this.markets.reduce((s, m) => s + m.volumeLifetimeUsd, 0));
   }
 
   // ── basics ─────────────────────────────────────────────────────────────────

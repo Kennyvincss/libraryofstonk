@@ -134,7 +134,7 @@ export function Timeline({ value, onChange, onCaption }: { value: number | null;
         </div>
         <div className="tl-stats">
           <div>
-            <b>{fmtNum(period.marketsCreated)}</b> markets
+            <b>{fmtNum(period.marketsCreated)}</b> {archive.tracked}launches
           </div>
           <div>
             <b>{fmtUsd(period.volumeUsd)}</b> volume
@@ -146,7 +146,7 @@ export function Timeline({ value, onChange, onCaption }: { value: number | null;
             <b>{period.moments.length}</b> major moments
           </div>
         </div>
-        <div className="tl-existing">{fmtNum(existing)} markets existed</div>
+        <div className="tl-existing">{fmtNum(existing)} {archive.tracked}markets existed</div>
         {period.moments[0] && (
           <Link to={`/moments/${period.moments[0].id}`} className="tl-moment">
             {MOMENT_KIND[period.moments[0].kind].glyph} {period.moments[0].title} →

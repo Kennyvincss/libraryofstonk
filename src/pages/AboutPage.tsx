@@ -5,7 +5,7 @@ import { BADGES, type BadgeId } from '../engine/badges';
 import { momentRules, notabilityWeights } from '../engine/config';
 import { MOMENT_KIND } from '../components/MomentCard';
 import { Footer } from '../components/Footer';
-import { fmtAgo, fmtDate, fmtNum } from '../lib/format';
+import { fmtAgo, fmtDate, fmtNum, fmtUsd } from '../lib/format';
 
 export function AboutPage() {
   const { archive } = useArchive();
@@ -63,6 +63,16 @@ export function AboutPage() {
                 <b>Real on-chain data.</b>
                 {meta.generatedAt ? ` Archive rebuilt ${fmtAgo(meta.generatedAt)}; charts, trades and the live feed are fetched live.` : ''} Moments, legends and badges are detected by the engine from this data.
               </p>
+              {meta.platform && (
+                <p>
+                  Platform totals ({meta.platform.source}): {meta.platform.volume24h !== undefined && <>{fmtUsd(meta.platform.volume24h)} in 24h · </>}
+                  {meta.platform.volume30d !== undefined && <>{fmtUsd(meta.platform.volume30d)} in 30 days · </>}
+                  {meta.platform.volumeAllTime !== undefined && <>{fmtUsd(meta.platform.volumeAllTime)} all-time · </>}
+                  <a href={meta.platform.url} target="_blank" rel="noreferrer">
+                    source ↗
+                  </a>
+                </p>
+              )}
               {meta.method && (
                 <ul className="method">
                   {meta.method.map((m) => (

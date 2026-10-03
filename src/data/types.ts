@@ -209,6 +209,13 @@ export interface SourceMeta {
   generatedAt?: number;
   /** plain-language notes on how numbers are derived */
   method?: string[];
+  /** authoritative platform-wide totals (e.g. DefiLlama), when available */
+  platform?: { source: string; url: string; volume24h?: number; volume7d?: number; volume30d?: number; volumeAllTime?: number };
+  /**
+   * 'partial' = the market list is not every market ever launched (e.g. only
+   * the busiest pools are discoverable); the UI says "tracked".
+   */
+  coverage?: 'complete' | 'partial';
 }
 
 /** Progressive loading tiers for the universe. */

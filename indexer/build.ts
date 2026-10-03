@@ -155,7 +155,17 @@ export function buildMarket(r: PoolRecord, bars: Ohlcv[], tracked: Tracked[strin
   };
 }
 
-export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number): BuiltArchive {
+export interface Platform {
+  source: string;
+  url: string;
+  daily: Record<string, number>;
+  total24h?: number;
+  total7d?: number;
+  total30d?: number;
+  totalAllTime?: number;
+}
+
+export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number, platform?: Platform | null): BuiltArchive {
   // StonkFun markets only: tokens with a StonkFun (or post-switch LaunchLab) pool
   const stockSet = new Set(quotes.filter((q) => q.kind !== 'crypto' && q.kind !== 'stable').map((q) => q.symbol));
   const sf = stonkFunMints(records, stockSet);
@@ -212,6 +222,8 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
     }
   }
   eco.forEach((e, i) => (e.marketReturn = retW[i] > 0 ? e.marketReturn! / retW[i] : 0));
+  // platform-wide daily volume is authoritative when we have it
+  if (platform && Object.keys(platform.daily).length) for (const e of eco) e.volumeUsd = platform.daily[String(e.t)] ?? 0;
 
   // most notable first, exactly how the site will rank them
   const { rank } = scoreMarkets(markets, now, new Map());
@@ -228,7 +240,15 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
       totalMarkets: sorted.length,
       quoteAssets: quotes.filter((q) => sorted.some((m) => m.quote === q.symbol)),
       generatedAt: now,
+      coverage: 'partial',
+      platform: platform
+        ? { source: platform.source, url: platform.url, volume24h: platform.total24h, volume7d: platform.total7d, volume30d: platform.total30d, volumeAllTime: platform.totalAllTime }
+        : undefined,
       method: [
+        platform
+          ? `Platform-wide daily and all-time volume come from ${platform.source} (${platform.url}).`
+          : 'Platform-wide volume is the sum of tracked markets (no platform-level source was reachable).',
+        'Individual markets are those GeckoTerminal currently lists, its busiest StonkFun pools, accumulated run after run. That is not every market ever launched, so counts are labelled “tracked”.',
         'Markets are tokens launched on StonkFun: GeckoTerminal indexes StonkFun’s bonding curve as its own exchange, and from Sept 6, 2026 StonkFun deploys through Raydium LaunchLab with stock-quoted pools. Each token’s graduated pools are merged into it.',
         'The archive starts on July 23, 2026, when the STONK platform token was deployed; StonkFun launched on August 3, 2026.',
         'Prices, liquidity, 24h volume and daily OHLCV come from GeckoTerminal.',

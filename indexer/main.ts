@@ -19,6 +19,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { BudgetExhausted, Gecko, log } from './client';
 import { buildArchive, groupByMint, type Tracked } from './build';
+import { fetchPlatformVolume, type PlatformVolume } from './llama';
 import { NETWORK, num, parseOhlcv, poolToRecord, tokenMap, type GtList, type GtPool, type GtToken, type Ohlcv, type PoolRecord, type QuoteRef } from '../src/data/live/gecko';
 import { CRYPTO_QUOTE_SPECS, EXCLUDED_MINTS, QUOTE_SPECS, specToQuote } from '../src/data/live/quotes';
 import { STONKFUN, stonkFunMints } from '../src/data/live/stonkfun';
@@ -38,6 +39,7 @@ interface State {
   /** next deep page of StonkFun's own pool list to visit */
   stonkfunPage?: number;
   cryptoPrices?: Record<string, number>;
+  platform?: PlatformVolume;
 }
 
 const args = process.argv.slice(2);
@@ -148,6 +150,10 @@ async function main() {
   const gt = new Gecko(BUDGET);
   const seen = new Set<string>();
 
+  // platform totals first: a separate API with its own rate limit
+  const platform = await fetchPlatformVolume(now);
+  if (platform) state.platform = platform;
+
   try {
     log(`run start · ${Object.keys(state.pools).length} known pools · budget ${BUDGET} calls`);
     const quotes = await resolveQuotes(gt, state, now);
@@ -251,7 +257,7 @@ async function main() {
     ...QUOTE_SPECS.filter((s) => state.quotes[s.symbol]?.mint).map((s) => specToQuote(s, state.quotes[s.symbol].mint, state.quotes[s.symbol].priceUsd)),
     ...CRYPTO_QUOTE_SPECS.map((c) => specToQuote(c, c.mint!, state.cryptoPrices?.[c.symbol] ?? 0)),
   ];
-  const built = buildArchive(records, bars, state.tracked, quoteAssets, now);
+  const built = buildArchive(records, bars, state.tracked, quoteAssets, now, state.platform);
 
   // prune tracked days older than 400 days to bound state size
   const cutoff = now - 400 * DAY;

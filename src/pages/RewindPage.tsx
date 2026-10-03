@@ -41,7 +41,7 @@ export function RewindPage() {
       .filter((m) => m.kind !== 'milestone' || /markets$/.test(m.key) || m.origin === 'curated')
       .slice()
       .sort((a, b) => a.start - b.start);
-    const total = Math.max(archive.ecosystem.reduce((s, d) => s + d.volumeUsd, 0), archive.markets.reduce((s, m) => s + m.volumeLifetimeUsd, 0));
+    const total = archive.totalVolume;
     return [
       {
         id: 'intro',
@@ -49,7 +49,7 @@ export function RewindPage() {
         at: start + 14 * DAY,
         eyebrow: fmtDate(start),
         title: 'IN THE BEGINNING',
-        body: `The archive begins on ${fmtDate(start)}. In its first two weeks, ${fmtNum(first)} markets appeared — tokens priced in stocks, ETFs and crypto. Nobody knew what was coming.`,
+        body: `The archive begins on ${fmtDate(start)}. In its first two weeks, ${fmtNum(first)} ${archive.tracked}markets appeared — tokens priced in stocks, ETFs and crypto. Nobody knew what was coming.`,
         stats: [],
         highlight: null,
       },
@@ -74,7 +74,7 @@ export function RewindPage() {
         at: archive.now,
         eyebrow: 'Today',
         title: 'AND IT KEEPS GOING',
-        body: `${fmtNum(archive.markets.length)} markets, ${fmtUsd(total)} traded, ${archive.publicMoments.length} moments — and the next one is already forming somewhere in the universe.`,
+        body: `${fmtNum(archive.markets.length)} ${archive.tracked}markets, ${fmtUsd(total)} traded, ${archive.publicMoments.length} moments — and the next one is already forming somewhere in the universe.`,
         stats: [],
         highlight: null,
       },

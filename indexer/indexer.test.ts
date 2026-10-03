@@ -120,6 +120,16 @@ describe('archive build', () => {
     expect(b.markets[0].trades24h).toBe(550);
   });
 
+  test('platform daily volume (DefiLlama) is authoritative for ecosystem days', () => {
+    const daily = { [String(day('2026-09-01'))]: 5_000_000, [String(day('2026-08-03'))]: 1_000_000 };
+    const b = buildArchive(recs, bars, tracked, [], NOW, { source: 'DefiLlama', url: 'https://defillama.com/protocol/stonkfun', daily, totalAllTime: 52_300_000 });
+    expect(b.ecosystem.find((e) => e.t === day('2026-09-01'))!.volumeUsd).toBe(5_000_000);
+    expect(b.ecosystem.find((e) => e.t === day('2026-08-03'))!.volumeUsd).toBe(1_000_000);
+    expect(b.meta.coverage).toBe('partial');
+    expect(b.meta.platform?.volumeAllTime).toBe(52_300_000);
+    expect(new Archive(b.meta, b.markets, b.ecosystem).totalVolume).toBe(52_300_000);
+  });
+
   test('only StonkFun markets are kept', () => {
     const pump = { ...recs[0], address: 'PumpPool', mint: 'PumpMint', symbol: 'PUMPY', dexId: 'pump-fun' };
     const early = { ...recs[0], address: 'OldLaunchlab', mint: 'OldMint', dexId: 'raydium-launchlab', createdAt: day('2026-08-20') };

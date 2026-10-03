@@ -20,7 +20,7 @@ export function Home() {
   const legends = archive.legends().slice(0, 4);
   const narratives = archive.narratives.filter((n) => n.count >= 20).slice(0, 28);
   // per-market totals always exist; daily ecosystem history may still be backfilling
-  const totalVol = Math.max(archive.ecosystem.reduce((s, d) => s + d.volumeUsd, 0), archive.markets.reduce((s, m) => s + m.volumeLifetimeUsd, 0));
+  const totalVol = archive.totalVolume;
 
   return (
     <div className="home">
@@ -29,7 +29,7 @@ export function Home() {
         <div className="hero-vignette" aria-hidden />
         <div className="hero-content">
           <div className="eyebrow">
-            <span className="pulse-dot" /> {fmtNum(archive.markets.length)} markets · {archive.publicMoments.length} moments · {fmtUsd(totalVol)} traded
+            <span className="pulse-dot" /> {fmtNum(archive.markets.length)} {archive.tracked}markets · {archive.publicMoments.length} moments · {fmtUsd(totalVol)} traded{archive.meta.platform ? ` (${archive.meta.platform.source})` : ''}
           </div>
           <h1 className="hero-title">
             <span>STONKFUN</span>

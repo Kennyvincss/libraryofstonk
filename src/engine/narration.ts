@@ -62,15 +62,16 @@ function marketPhrase(a: Archive, m: Market) {
 /** One spoken line for one day — short enough to fit the 5-second beat on quiet days. */
 export function dayLine(a: Archive, f: DayFacts): string {
   const date = sayDate(f.t);
+  const tr = a.tracked; // 'tracked ' when the market list is partial
   const parts: string[] = [];
   if (f.launches === 0 && f.volumeUsd < 1) return `${date}. Silence on StonkFun.`;
 
   parts.push(
     pick(
       [
-        `${date}. ${sayNum(f.launches)} new ${f.launches === 1 ? 'market' : 'markets'}, ${sayUsd(f.volumeUsd)} traded.`,
-        `${date}. ${sayUsd(f.volumeUsd)} changed hands, and ${sayNum(f.launches)} ${f.launches === 1 ? 'market was' : 'markets were'} born.`,
-        `${date}. ${sayNum(f.launches)} launches. ${sayUsd(f.volumeUsd)} in volume.`,
+        `${date}. ${sayUsd(f.volumeUsd)} traded across StonkFun; ${sayNum(f.launches)} new ${tr}${f.launches === 1 ? 'market' : 'markets'}.`,
+        `${date}. ${sayUsd(f.volumeUsd)} changed hands, and ${sayNum(f.launches)} ${tr}${f.launches === 1 ? 'market was' : 'markets were'} born.`,
+        `${date}. ${sayNum(f.launches)} ${tr}launches. ${sayUsd(f.volumeUsd)} in volume.`,
       ],
       `d${f.t}`,
     ),
