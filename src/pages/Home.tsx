@@ -19,7 +19,8 @@ export function Home() {
   const moments = archive.publicMoments.filter((m) => m.kind !== 'milestone').slice(0, 3);
   const legends = archive.legends().slice(0, 4);
   const narratives = archive.narratives.filter((n) => n.count >= 20).slice(0, 28);
-  const totalVol = archive.ecosystem.reduce((s, d) => s + d.volumeUsd, 0);
+  // per-market totals always exist; daily ecosystem history may still be backfilling
+  const totalVol = Math.max(archive.ecosystem.reduce((s, d) => s + d.volumeUsd, 0), archive.markets.reduce((s, m) => s + m.volumeLifetimeUsd, 0));
 
   return (
     <div className="home">

@@ -41,7 +41,7 @@ export function RewindPage() {
       .filter((m) => m.kind !== 'milestone' || /markets$/.test(m.key))
       .slice()
       .sort((a, b) => a.start - b.start);
-    const total = archive.ecosystem.reduce((s, d) => s + d.volumeUsd, 0);
+    const total = Math.max(archive.ecosystem.reduce((s, d) => s + d.volumeUsd, 0), archive.markets.reduce((s, m) => s + m.volumeLifetimeUsd, 0));
     return [
       {
         id: 'intro',
