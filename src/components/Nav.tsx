@@ -4,7 +4,6 @@ import { useUi } from '../hooks/ui';
 import { DemoChip } from './bits';
 
 const LINKS = [
-  ['/archive', 'Archive'],
   ['/universe', 'Universe'],
   ['/moments', 'Moments'],
   ['/explore', 'Explore'],
@@ -16,7 +15,7 @@ export function Nav() {
   const { openSearch, openSurprise } = useUi();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
-  const overlay = loc.pathname === '/' || loc.pathname === '/archive' || loc.pathname === '/universe' || loc.pathname === '/rewind';
+  const overlay = loc.pathname === '/' || loc.pathname === '/universe' || loc.pathname === '/rewind';
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const on = () => setScrolled(window.scrollY > 40);

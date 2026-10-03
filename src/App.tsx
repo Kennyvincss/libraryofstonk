@@ -1,11 +1,10 @@
 import { useEffect } from 'react';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useArchiveState } from './hooks/archive';
 import { Nav } from './components/Nav';
 import { SearchOverlay } from './components/SearchOverlay';
 import { SurpriseModal } from './components/SurpriseModal';
 import { Loading } from './components/Loading';
-import { Home } from './pages/Home';
 import { UniversePage } from './pages/UniversePage';
 import { MomentsPage } from './pages/MomentsPage';
 import { MomentPage } from './pages/MomentPage';
@@ -34,7 +33,7 @@ export function App() {
           <main className="page" key={loc.pathname}>
             <Routes location={loc}>
               <Route path="/" element={<RewindPage />} />
-              <Route path="/archive" element={<Home />} />
+              <Route path="/archive" element={<Navigate to="/" replace />} />
               <Route path="/universe" element={<UniversePage />} />
               <Route path="/moments" element={<MomentsPage />} />
               <Route path="/moments/:id" element={<MomentPage />} />

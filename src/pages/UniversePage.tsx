@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { momentsOnDay } from '../engine/narration';
 import { MOMENT_KIND } from '../components/MomentCard';
 import { Universe } from '../universe/Universe';
 import { useArchive } from '../hooks/archive';
@@ -70,11 +71,10 @@ export function UniversePage() {
 
   // moments happening at the current point in time
   const happening = useMemo(
-    () => (t === null ? [] : archive.publicMoments.filter((m) => m.kind !== 'milestone' && t >= m.start && t <= m.end + 2 * 86_400_000).slice(0, 2)),
+    () => (t === null ? [] : momentsOnDay(archive.publicMoments, t).slice(0, 2)),
     [archive, t],
   );
   const pulse = useMemo(() => (happening[0] ? { key: happening[0].id, ids: happening[0].marketIds.slice(0, 12), color: '#ffcf5a' } : null), [happening]);
-  const bornBy = useMemo(() => (t === null ? 0 : Math.max(archive.markets.reduce((n, m) => n + (m.createdAt <= t ? 1 : 0), 0), archive.launchesBetween(archive.meta.archiveStart - 86_400_000, t))), [archive, t]);
 
   const onTime = useCallback(
     (nt: number | null) => {
@@ -125,9 +125,6 @@ export function UniversePage() {
       {t !== null && (
         <div className="tt-overlay" aria-live="polite">
           <div className="tt-date">{fmtDate(t)}</div>
-          <div className="tt-count">
-            <b>{fmtNum(bornBy)}</b> {archive.tracked}markets in the archive
-          </div>
           {caption && (
             <p className="tt-caption" key={caption}>
               {caption}

@@ -22,6 +22,15 @@ export interface DayFacts {
 }
 
 /** Per-day facts, computed once per archive. */
+/**
+ * Moments that begin on the UTC day containing `t` — the same set (and order)
+ * the day's narration speaks about, so captions and on-screen chips agree.
+ */
+export function momentsOnDay(moments: Moment[], t: number): Moment[] {
+  const d = Math.floor(t / DAY) * DAY;
+  return moments.filter((m) => m.kind !== 'milestone' && m.kind !== 'news' && Math.floor(m.start / DAY) * DAY === d);
+}
+
 export function buildDayIndex(a: Archive): Map<number, DayFacts> {
   const idx = new Map<number, DayFacts>();
   for (const d of a.ecosystem) {
