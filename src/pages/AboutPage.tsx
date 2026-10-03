@@ -63,6 +63,12 @@ export function AboutPage() {
                 <b>Real on-chain data.</b>
                 {meta.generatedAt ? ` Archive rebuilt ${fmtAgo(meta.generatedAt)}; charts, trades and the live feed are fetched live.` : ''} Moments, legends and badges are detected by the engine from this data.
               </p>
+              {meta.chain && (
+                <p>
+                  On-chain: <b>{fmtNum(meta.chain.totalMarkets)}</b> StonkFun markets, launch dates for {fmtNum(meta.chain.datedMarkets)} so far
+                  {meta.chain.datedMarkets < meta.chain.totalMarkets ? ' (backfilling every hour)' : ''}. The universe shows the {fmtNum(archive.markets.length)} most notable.
+                </p>
+              )}
               {meta.platform && (
                 <p>
                   Platform totals ({meta.platform.source}): {meta.platform.volume24h !== undefined && <>{fmtUsd(meta.platform.volume24h)} in 24h · </>}

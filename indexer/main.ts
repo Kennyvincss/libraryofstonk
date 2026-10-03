@@ -151,7 +151,9 @@ function ingest(state: State, list: GtList<GtPool> | null, quotes: Map<string, Q
   return n;
 }
 
-const CHAIN_NEW_PER_RUN = Number(process.env.INDEXER_CHAIN_NEW_PER_RUN || 4000);
+const CHAIN_NEW_PER_RUN = Number(process.env.INDEXER_CHAIN_NEW_PER_RUN || 15000);
+/** minutes of each run spent backfilling on-chain creation times (Helius has its own rate limit) */
+const CHAIN_MINUTES = Number(process.env.INDEXER_CHAIN_MINUTES || 12);
 
 /** Enumerate every StonkFun pool on-chain (Helius) and fill in metadata + creation times. */
 async function chainPhase(state: State, gt: Gecko, stocks: Map<string, QuoteRef & { priceUsd: number }>, now: number) {
@@ -196,11 +198,15 @@ async function chainPhase(state: State, gt: Gecko, stocks: Map<string, QuoteRef 
   log(`helius: ${found.length} StonkFun pools on-chain (${Object.keys(chain.pools).length} known)`);
 
   // creation times for new pools
-  const missing = Object.values(chain.pools).filter((p) => !p.createdAt).slice(0, CHAIN_NEW_PER_RUN);
+  const active = new Set(Object.entries(chain.stats).filter(([, v]) => (v.vol24 ?? 0) > 0).map(([m]) => m));
+  const missing = Object.values(chain.pools)
+    .filter((p) => !p.createdAt)
+    .sort((a, b) => Number(active.has(b.baseMint)) - Number(active.has(a.baseMint)))
+    .slice(0, CHAIN_NEW_PER_RUN);
   let done = 0;
   // creation-time backfill gets at most 40% of the run; the rest continues next run
-  const stopAt = Date.now() + Number(process.env.INDEXER_MAX_MINUTES || 30) * 60_000 * 0.4;
-  await mapLimit(missing, 3, async (p) => {
+  const stopAt = Date.now() + CHAIN_MINUTES * 60_000;
+  await mapLimit(missing, 4, async (p) => {
     if (Date.now() > stopAt) return;
     try {
       p.createdAt = await creationTime(p.address);
@@ -287,11 +293,32 @@ function chainRecords(state: State, stocks: Map<string, QuoteRef>, now: number):
   return out;
 }
 
+// ── compact on-chain cache (kept out of state.json; each file well under GitHub's 100 MB) ──
+type PoolRow = [string, 0 | 1, string, string, number]; // address, program(0 stonkfun/1 launchlab), base, quote, createdAt sec (0 = unknown)
+async function loadChain(state: State) {
+  if (!state.chain) return;
+  const rows = await readJson<PoolRow[] | null>(join(OUT, 'cache', 'chain-pools.json'), null);
+  if (rows) state.chain.pools = Object.fromEntries(rows.map(([a, k, b, q, t]) => [a, { address: a, program: k ? 'launchlab' : 'stonkfun', baseMint: b, quoteMint: q, createdAt: t ? t * 1000 : undefined }]));
+  const meta = await readJson<Record<string, [string?, string?, string?]> | null>(join(OUT, 'cache', 'chain-meta.json'), null);
+  if (meta) state.chain.meta = Object.fromEntries(Object.entries(meta).map(([m, [n, sy, im]]) => [m, { name: n || undefined, symbol: sy || undefined, image: im || undefined }]));
+  const stats = await readJson<State['chain'] extends infer C ? (C extends { stats: infer S } ? S : never) : never>(join(OUT, 'cache', 'chain-stats.json'), {} as never);
+  if (stats) state.chain.stats = stats;
+}
+async function saveChain(state: State) {
+  const c = state.chain;
+  if (!c) return;
+  const rows: PoolRow[] = Object.values(c.pools).map((p) => [p.address, p.program === 'launchlab' ? 1 : 0, p.baseMint, p.quoteMint, p.createdAt ? Math.round(p.createdAt / 1000) : 0]);
+  await writeJson(join(OUT, 'cache', 'chain-pools.json'), rows);
+  await writeJson(join(OUT, 'cache', 'chain-meta.json'), Object.fromEntries(Object.entries(c.meta).map(([m, v]) => [m, [v.name ?? '', v.symbol ?? '', v.image ?? '']])));
+  await writeJson(join(OUT, 'cache', 'chain-stats.json'), c.stats);
+}
+
 async function main() {
   const now = Date.now();
   await mkdir(join(OUT, 'v1', 'bars'), { recursive: true });
   await mkdir(join(OUT, 'cache'), { recursive: true });
   const state = await readJson<State>(join(OUT, 'cache', 'state.json'), { version: 1, quotes: {}, pools: {}, tracked: {}, history: {}, lastDeepDiscovery: {} });
+  await loadChain(state);
   state.lastDeepDiscovery ??= {};
   const gt = new Gecko(BUDGET);
   const seen = new Set<string>();
@@ -416,8 +443,22 @@ async function main() {
     ...QUOTE_SPECS.filter((s) => state.quotes[s.symbol]?.mint).map((s) => specToQuote(s, state.quotes[s.symbol].mint, state.quotes[s.symbol].priceUsd)),
     ...CRYPTO_QUOTE_SPECS.map((c) => specToQuote(c, c.mint!, state.cryptoPrices?.[c.symbol] ?? 0)),
   ];
-  const complete = Boolean(state.chain?.enumeratedAt && now - state.chain.enumeratedAt < 2 * DAY);
-  const built = buildArchive(records, bars, state.tracked, quoteAssets, now, state.platform, complete);
+  const fresh = Boolean(state.chain?.enumeratedAt && now - state.chain.enumeratedAt < 2 * DAY);
+  const chainPools = fresh ? Object.values(state.chain!.pools) : [];
+  const dated = chainPools.filter((p) => p.createdAt);
+  const chainInfo = fresh
+    ? {
+        totalPools: chainPools.length,
+        datedPools: dated.length,
+        // exact launches per UTC day from on-chain creation times
+        createdByDay: dated.reduce<Record<string, number>>((acc, p) => {
+          const d = String(Math.floor(p.createdAt! / DAY) * DAY);
+          acc[d] = (acc[d] ?? 0) + 1;
+          return acc;
+        }, {}),
+      }
+    : undefined;
+  const built = buildArchive(records, bars, state.tracked, quoteAssets, now, state.platform, chainInfo);
 
   // prune tracked days older than 400 days to bound state size
   const cutoff = now - 400 * DAY;
@@ -427,7 +468,8 @@ async function main() {
   await writeJson(join(OUT, 'v1', 'markets.json'), built.markets);
   await writeJson(join(OUT, 'v1', 'ecosystem.json'), built.ecosystem);
   await writeJson(join(OUT, 'v1', 'activity.json'), built.activity);
-  await writeJson(join(OUT, 'cache', 'state.json'), state);
+  await saveChain(state);
+  await writeJson(join(OUT, 'cache', 'state.json'), { ...state, chain: state.chain ? { ...state.chain, pools: {}, meta: {}, stats: {} } : undefined });
   log(`helius calls this run: ${heliusCalls()}`);
   log(`done · ${built.markets.length} markets · ${bars.size} with history · ${gt.calls} API calls`);
 }

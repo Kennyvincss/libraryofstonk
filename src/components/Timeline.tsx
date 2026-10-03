@@ -122,7 +122,7 @@ export function Timeline({ value, onChange, onCaption }: { value: number | null;
   const mStart = Date.UTC(new Date(t).getUTCFullYear(), new Date(t).getUTCMonth(), 1);
   const mEnd = Date.UTC(new Date(t).getUTCFullYear(), new Date(t).getUTCMonth() + 1, 1);
   const period = useMemo(() => archive.period(mStart, mEnd), [archive, mStart, mEnd]);
-  const existing = useMemo(() => archive.markets.reduce((s, m) => s + (m.createdAt <= t ? 1 : 0), 0), [archive, t]);
+  const existing = useMemo(() => Math.max(archive.markets.reduce((s, m) => s + (m.createdAt <= t ? 1 : 0), 0), archive.launchesBetween(start - DAY, t)), [archive, t, start]);
   const monthName = new Date(t).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).toUpperCase();
 
   return (
@@ -146,7 +146,15 @@ export function Timeline({ value, onChange, onCaption }: { value: number | null;
             <b>{period.moments.length}</b> major moments
           </div>
         </div>
-        <div className="tl-existing">{fmtNum(existing)} {archive.tracked}markets existed</div>
+        <div className="tl-existing">
+          {fmtNum(existing)} {archive.tracked}markets existed
+          {archive.meta.chain && archive.meta.chain.datedMarkets < archive.meta.chain.totalMarkets && (
+            <span title="Launch dates come from each market's first on-chain transaction and are still being backfilled">
+              {' '}
+              · dates {Math.round((archive.meta.chain.datedMarkets / archive.meta.chain.totalMarkets) * 100)}% backfilled
+            </span>
+          )}
+        </div>
         {period.moments[0] && (
           <Link to={`/moments/${period.moments[0].id}`} className="tl-moment">
             {MOMENT_KIND[period.moments[0].kind].glyph} {period.moments[0].title} →

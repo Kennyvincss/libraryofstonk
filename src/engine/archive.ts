@@ -140,7 +140,18 @@ export class Archive {
 
   /** "tracked" when the market list isn't every market ever launched */
   get tracked(): string {
-    return this.meta.coverage === 'partial' ? 'tracked ' : '';
+    // with an on-chain enumeration the totals are exact even while dates backfill
+    return this.meta.coverage === 'partial' && !this.meta.chain ? 'tracked ' : '';
+  }
+  /** every market ever launched (may exceed the markets loaded into the universe) */
+  get marketCount(): number {
+    return Math.max(this.meta.totalMarkets, this.markets.length);
+  }
+  /** markets created in [start, end): from daily on-chain counts when available */
+  launchesBetween(start: number, end: number): number {
+    const fromDays = this.ecosystem.filter((d) => d.t >= start && d.t < end).reduce((s, d) => s + d.marketsCreated, 0);
+    const fromMarkets = this.markets.reduce((s, m) => s + (m.createdAt >= start && m.createdAt < end ? 1 : 0), 0);
+    return Math.max(fromDays, fromMarkets);
   }
   /** platform-wide volume: authoritative source if present, else the daily series, else market totals */
   get totalVolume(): number {
@@ -398,18 +409,20 @@ export class Archive {
   // ── time travel ────────────────────────────────────────────────────────────
   period(start: number, end: number): PeriodSummary {
     let created = 0;
+    let loaded = 0;
     let notable = 0;
     let cumulative = 0;
     const notableCut = Math.max(50, this.markets.length * 0.03);
     this.markets.forEach((m, i) => {
-      if (m.createdAt < end) cumulative++;
+      if (m.createdAt < end) loaded++;
       if (m.createdAt >= start && m.createdAt < end) {
-        created++;
         if (this.notability.rank[i] < notableCut || this.badges.has(m.id)) notable++;
       }
     });
     const volumeUsd = this.ecosystem.filter((d) => d.t >= start && d.t < end).reduce((s, d) => s + d.volumeUsd, 0);
     const moments = this.publicMoments.filter((mo) => mo.start < end && mo.end >= start && mo.kind !== 'milestone');
+    created = this.launchesBetween(start, end);
+    cumulative = Math.max(loaded, this.launchesBetween(this.meta.archiveStart - 86_400_000, end));
     return { start, end, marketsCreated: created, volumeUsd, notable, moments, cumulativeMarkets: cumulative };
   }
 

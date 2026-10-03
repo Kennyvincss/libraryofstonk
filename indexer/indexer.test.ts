@@ -134,6 +134,21 @@ describe('archive build', () => {
     expect(new Archive(b.meta, b.markets, b.ecosystem).totalVolume).toBeGreaterThanOrEqual(52_300_000);
   });
 
+  test('on-chain totals: exact market count, daily launches, complete only when dated', () => {
+    const createdByDay = { [String(day('2026-09-01'))]: 1200, [String(day('2026-09-02'))]: 950 };
+    const partial = buildArchive(recs, bars, tracked, [], NOW, null, { totalPools: 158_372, datedPools: 2_247, createdByDay });
+    expect(partial.meta.totalMarkets).toBe(158_372);
+    expect(partial.meta.coverage).toBe('partial');
+    expect(partial.meta.chain).toEqual({ totalMarkets: 158_372, datedMarkets: 2_247 });
+    expect(partial.ecosystem.find((e) => e.t === day('2026-09-01'))!.marketsCreated).toBe(1200);
+    const a = new Archive(partial.meta, partial.markets, partial.ecosystem);
+    expect(a.marketCount).toBe(158_372);
+    expect(a.tracked).toBe('');
+    expect(a.launchesBetween(day('2026-09-01'), day('2026-09-03'))).toBe(2150);
+    const done = buildArchive(recs, bars, tracked, [], NOW, null, { totalPools: 1000, datedPools: 990, createdByDay });
+    expect(done.meta.coverage).toBe('complete');
+  });
+
   test('only StonkFun markets are kept', () => {
     const pump = { ...recs[0], address: 'PumpPool', mint: 'PumpMint', symbol: 'PUMPY', dexId: 'pump-fun' };
     const early = { ...recs[0], address: 'OldLaunchlab', mint: 'OldMint', dexId: 'raydium-launchlab', createdAt: day('2026-08-20') };

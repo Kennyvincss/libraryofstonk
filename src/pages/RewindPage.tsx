@@ -36,7 +36,7 @@ export function RewindPage() {
 
   const scenes = useMemo<Scene[]>(() => {
     const start = archive.meta.archiveStart;
-    const first = archive.markets.filter((m) => m.createdAt < start + 14 * DAY).length;
+    const first = archive.launchesBetween(start - DAY, start + 14 * DAY);
     const moments = archive.publicMoments
       .filter((m) => m.kind !== 'milestone' || /markets$/.test(m.key) || m.origin === 'curated')
       .slice()
@@ -74,7 +74,7 @@ export function RewindPage() {
         at: archive.now,
         eyebrow: 'Today',
         title: 'AND IT KEEPS GOING',
-        body: `${fmtNum(archive.markets.length)} ${archive.tracked}markets, ${fmtUsd(total)} traded, ${archive.publicMoments.length} moments — and the next one is already forming somewhere in the universe.`,
+        body: `${fmtNum(archive.marketCount)} ${archive.tracked}markets, ${fmtUsd(total)} traded, ${archive.publicMoments.length} moments — and the next one is already forming somewhere in the universe.`,
         stats: [],
         highlight: null,
       },

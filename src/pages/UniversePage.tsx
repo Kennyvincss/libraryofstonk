@@ -74,7 +74,7 @@ export function UniversePage() {
     [archive, t],
   );
   const pulse = useMemo(() => (happening[0] ? { key: happening[0].id, ids: happening[0].marketIds.slice(0, 12), color: '#ffcf5a' } : null), [happening]);
-  const bornBy = useMemo(() => (t === null ? 0 : archive.markets.reduce((n, m) => n + (m.createdAt <= t ? 1 : 0), 0)), [archive, t]);
+  const bornBy = useMemo(() => (t === null ? 0 : Math.max(archive.markets.reduce((n, m) => n + (m.createdAt <= t ? 1 : 0), 0), archive.launchesBetween(archive.meta.archiveStart - 86_400_000, t))), [archive, t]);
 
   const onTime = useCallback(
     (nt: number | null) => {

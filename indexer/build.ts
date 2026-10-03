@@ -165,7 +165,9 @@ export interface Platform {
   totalAllTime?: number;
 }
 
-export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number, platform?: Platform | null, complete = false): BuiltArchive {
+export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number, platform?: Platform | null, chain?: { totalPools: number; datedPools: number; createdByDay: Record<string, number> }): BuiltArchive {
+  // complete once (nearly) every on-chain market has a launch date
+  const complete = Boolean(chain && chain.totalPools > 0 && chain.datedPools / chain.totalPools >= 0.95);
   // StonkFun markets only: tokens with a StonkFun (or post-switch LaunchLab) pool
   const stockSet = new Set(quotes.filter((q) => q.kind !== 'crypto' && q.kind !== 'stable').map((q) => q.symbol));
   const sf = stonkFunMints(records, stockSet);
@@ -222,6 +224,8 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
     }
   }
   eco.forEach((e, i) => (e.marketReturn = retW[i] > 0 ? e.marketReturn! / retW[i] : 0));
+  // launches per day: on-chain creation times when we have them (exact once fully dated)
+  if (chain) for (const e of eco) e.marketsCreated = Math.max(e.marketsCreated, chain.createdByDay[String(e.t)] ?? 0);
   // platform-wide daily volume is authoritative when we have it
   // (its series can start later than StonkFun did: earlier days keep the per-market sums)
   const platformDays = platform ? Object.keys(platform.daily).map(Number) : [];
@@ -231,7 +235,9 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
   // most notable first, exactly how the site will rank them
   const { rank } = scoreMarkets(markets, now, new Map());
   const order = markets.map((_, i) => i).sort((a, b) => rank[a] - rank[b]);
-  const sorted = order.map((i) => markets[i]);
+  // the site holds at most this many markets; the exact total is in meta
+  const MAX_PUBLISHED = Number(process.env.INDEXER_MAX_PUBLISHED_MARKETS || 20_000);
+  const sorted = order.map((i) => markets[i]).slice(0, MAX_PUBLISHED);
 
   return {
     meta: {
@@ -240,10 +246,11 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
       label: 'StonkFun on Solana · via GeckoTerminal',
       archiveStart: start,
       archiveEnd: now,
-      totalMarkets: sorted.length,
+      totalMarkets: Math.max(sorted.length, chain?.totalPools ?? 0),
       quoteAssets: quotes.filter((q) => sorted.some((m) => m.quote === q.symbol)),
       generatedAt: now,
       coverage: complete ? 'complete' : 'partial',
+      chain: chain ? { totalMarkets: chain.totalPools, datedMarkets: chain.datedPools } : undefined,
       platform: platform
         ? { source: platform.source, url: platform.url, volume24h: platform.total24h, volume7d: platform.total7d, volume30d: platform.total30d, volumeAllTime: platform.totalAllTime }
         : undefined,
@@ -251,7 +258,9 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
         platform
           ? `Platform-wide daily volume comes from ${platform.source} (${platform.url})${Number.isFinite(platformFrom) ? `, whose StonkFun series begins ${new Date(platformFrom).toISOString().slice(0, 10)}; earlier days are summed from each market’s own daily history` : ''}.`
           : 'Platform-wide volume is the sum of tracked markets (no platform-level source was reachable).',
-        complete
+        chain
+          ? `Markets are enumerated from chain state (via Helius): ${chain.totalPools.toLocaleString('en-US')} StonkFun pools on Raydium LaunchLab, identified by StonkFun’s platform accounts; launch dates are each pool’s first on-chain transaction (${chain.datedPools.toLocaleString('en-US')} dated so far). The site shows the most notable markets with live stats.`
+          : complete
           ? 'Markets are enumerated from chain state (via Helius): every pool of StonkFun’s bonding-curve program, plus every Raydium LaunchLab pool quoted in a tracked stock. LaunchLab pools quoted in SOL/USDC can’t be told apart from other launchpads, so those are only included when GeckoTerminal lists them as StonkFun. Creation times are each pool’s first on-chain transaction.'
           : 'Individual markets are those GeckoTerminal currently lists, its busiest StonkFun pools, accumulated run after run. That is not every market ever launched, so counts are labelled “tracked”.',
         'Markets are tokens launched on StonkFun: GeckoTerminal indexes StonkFun’s bonding curve as its own exchange, and from Sept 6, 2026 StonkFun deploys through Raydium LaunchLab with stock-quoted pools. Each token’s graduated pools are merged into it.',
@@ -262,6 +271,6 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
     },
     markets: sorted,
     ecosystem: eco,
-    activity: { start, days, rows },
+    activity: { start, days, rows: Object.fromEntries(sorted.filter((m) => rows[m.id]).map((m) => [m.id, rows[m.id]])) },
   };
 }

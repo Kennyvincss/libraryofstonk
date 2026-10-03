@@ -29,7 +29,7 @@ export function Home() {
         <div className="hero-vignette" aria-hidden />
         <div className="hero-content">
           <div className="eyebrow">
-            <span className="pulse-dot" /> {fmtNum(archive.markets.length)} {archive.tracked}markets · {archive.publicMoments.length} moments · {fmtUsd(totalVol)} traded{archive.meta.platform ? ` (${archive.meta.platform.source})` : ''}
+            <span className="pulse-dot" /> {fmtNum(archive.marketCount)} {archive.tracked}markets · {archive.publicMoments.length} moments · {fmtUsd(totalVol)} traded{archive.meta.platform ? ` (${archive.meta.platform.source})` : ''}
           </div>
           <h1 className="hero-title">
             <span>STONKFUN</span>

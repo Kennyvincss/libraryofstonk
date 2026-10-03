@@ -216,6 +216,8 @@ export interface SourceMeta {
    * the busiest pools are discoverable); the UI says "tracked".
    */
   coverage?: 'complete' | 'partial';
+  /** on-chain enumeration: exact market count and how many have launch dates yet */
+  chain?: { totalMarkets: number; datedMarkets: number };
 }
 
 /** Progressive loading tiers for the universe. */
