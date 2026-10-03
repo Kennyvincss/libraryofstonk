@@ -3,7 +3,10 @@ import { GECKO_API } from '../src/data/live/gecko';
 
 export class Gecko {
   calls = 0;
+  rateLimited = 0;
   private last = 0;
+  /** stop spending once the run is this old (ms) so outputs are always written */
+  private readonly deadline = Date.now() + Number(process.env.INDEXER_MAX_MINUTES || 30) * 60_000;
   constructor(
     private readonly budget: number,
     private readonly minIntervalMs = Number(process.env.INDEXER_MIN_INTERVAL_MS || 2200),
@@ -15,7 +18,7 @@ export class Gecko {
   }
 
   async get<T = unknown>(path: string): Promise<T | null> {
-    if (this.calls >= this.budget) throw new BudgetExhausted();
+    if (this.calls >= this.budget || Date.now() > this.deadline) throw new BudgetExhausted();
     for (let attempt = 0; attempt < 5; attempt++) {
       const wait = this.last + this.minIntervalMs - Date.now();
       if (wait > 0) await sleep(wait);
@@ -31,8 +34,11 @@ export class Gecko {
       }
       if (res.status === 404) return null;
       if (res.status === 429) {
-        log(`rate limited on ${path}, backing off`);
-        await sleep(61_000);
+        this.rateLimited++;
+        const retry = Number(res.headers.get('retry-after')) || 30;
+        log(`rate limited (${this.rateLimited}) on ${path.slice(0, 60)}, waiting ${retry}s`);
+        if (Date.now() + retry * 1000 > this.deadline) throw new BudgetExhausted();
+        await sleep(retry * 1000);
         continue;
       }
       if (res.status >= 500) {

@@ -48,6 +48,7 @@ jobs:
       - name: Run indexer
         env:
           INDEXER_MAX_CALLS: ${{ github.event.inputs.max_calls || '600' }}
+          INDEXER_MAX_MINUTES: '32'
         run: npx tsx indexer/main.ts --out data-out
 
       - name: Publish to data branch
