@@ -240,7 +240,7 @@ async function chainPhase(state: State, gt: Gecko, stocks: Map<string, QuoteRef 
   }
 }
 
-const LEGACY_MINUTES = Number(process.env.INDEXER_LEGACY_MINUTES || 8);
+const LEGACY_MINUTES = Number(process.env.INDEXER_LEGACY_MINUTES || 12);
 
 async function legacyPhase(state: State, stockMints: Set<string>, now: number) {
   const chain = state.chain!;

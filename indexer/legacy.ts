@@ -98,37 +98,43 @@ export async function enumerateStockPools(l: LegacyLayout, stockMints: Set<strin
  */
 export async function classify(cache: LegacyCache, from: number, to: number, minutes: number) {
   const stopAt = Date.now() + minutes * 60_000;
-  const undated = Object.values(cache.pools).filter((p) => p.createdAt === undefined);
-  let dated = 0;
-  await mapLimit(undated, 4, async (p) => {
-    if (Date.now() > stopAt) return;
-    try {
-      const c = await creationTx(p.address, 10);
-      p.createdAt = c?.t ?? 0;
-      if (c && c.t >= from - DAY && c.t < to + DAY) p.sig = c.signature;
-      dated++;
-    } catch (e) {
-      log(`legacy: creation time failed for ${p.address}: ${(e as Error).message}`);
-    }
-  });
-  const unchecked = Object.values(cache.pools).filter((p) => p.sig && p.launch === undefined);
-  let checked = 0;
-  await mapLimit(unchecked, 4, async (p) => {
-    if (Date.now() > stopAt) return;
-    try {
-      const tx = await transactionLogs(p.sig!);
-      if (!tx) return;
-      const mintInit = tx.logs.some((x) => /Instruction: InitializeMint/.test(x));
-      const poolInit = tx.logs.some((x) => /Instruction: (CreatePool|OpenPosition)/.test(x));
-      p.launch = mintInit && poolInit && tx.accounts.includes(p.token) ? 1 : 0;
-      p.signer = tx.signers[0];
+  const check = async (p: LegacyPool) => {
+    const tx = await transactionLogs(p.sig!);
+    if (!tx) {
+      p.launch = 0;
       delete p.sig;
-      checked++;
+      return;
+    }
+    const mintInit = tx.logs.some((x) => /Instruction: InitializeMint/.test(x));
+    const poolInit = tx.logs.some((x) => /Instruction: (CreatePool|OpenPosition)/.test(x));
+    p.launch = mintInit && poolInit && tx.accounts.includes(p.token) ? 1 : 0;
+    p.signer = tx.signers[0];
+    delete p.sig;
+  };
+  // finish half-done pools first, then date + check the rest in one pass
+  const todo = Object.values(cache.pools)
+    .filter((p) => p.createdAt === undefined || (p.sig && p.launch === undefined))
+    .sort((a, b) => Number(!!b.sig) - Number(!!a.sig));
+  let dated = 0;
+  let checked = 0;
+  await mapLimit(todo, 6, async (p) => {
+    if (Date.now() > stopAt) return;
+    try {
+      if (p.createdAt === undefined) {
+        const c = await creationTx(p.address, 5);
+        p.createdAt = c?.t ?? 0;
+        if (c && c.t >= from - DAY && c.t < to + DAY) p.sig = c.signature;
+        dated++;
+      }
+      if (p.sig && p.launch === undefined) {
+        await check(p);
+        checked++;
+      }
     } catch (e) {
-      log(`legacy: tx check failed for ${p.address}: ${(e as Error).message}`);
+      log(`legacy: ${p.address}: ${(e as Error).message}`);
     }
   });
-  log(`legacy: dated ${dated} of ${undated.length} pools, checked ${checked} of ${unchecked.length} creation transactions`);
+  log(`legacy: dated ${dated}, checked ${checked} creation transactions (${todo.length} pools were pending)`);
 }
 
 /** Launches per UTC day in [from, to). */
