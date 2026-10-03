@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { BudgetExhausted, Gecko, log } from './client';
 import { buildArchive, groupByMint, type Tracked } from './build';
 import { fetchPlatformVolume, type PlatformVolume } from './llama';
-import { creationTime, enumeratePools, heliusCalls, heliusEnabled, learnLayouts, pool as mapLimit, tokenMetadata, type ChainPool, type ProgramLayout, type TokenMeta } from './helius';
+import { creationTime, discoverLauncher, launchesPerDay, enumeratePools, heliusCalls, heliusEnabled, learnLayouts, pool as mapLimit, tokenMetadata, type ChainPool, type ProgramLayout, type TokenMeta } from './helius';
 import { NETWORK, num, parseOhlcv, poolToRecord, tokenMap, type GtList, type GtPool, type GtToken, type Ohlcv, type PoolRecord, type QuoteRef } from '../src/data/live/gecko';
 import { CRYPTO_QUOTE_SPECS, EXCLUDED_MINTS, QUOTE_SPECS, specToQuote } from '../src/data/live/quotes';
 import { STONKFUN, stonkFunMints } from '../src/data/live/stonkfun';
@@ -49,6 +49,8 @@ interface State {
     meta: Record<string, TokenMeta>;
     stats: Record<string, { priceUsd?: number; vol24?: number; mcapUsd?: number; fdvUsd?: number; reserveUsd?: number; observedAt: number }>;
     enumeratedAt?: number;
+    /** pre-LaunchLab era: launches counted from StonkFun's launcher wallet */
+    legacy?: { wallet?: string; byDay: Record<string, number>; total: number; countedAt: number };
   };
 }
 
@@ -196,6 +198,24 @@ async function chainPhase(state: State, gt: Gecko, stocks: Map<string, QuoteRef 
   for (const cp of found) chain.pools[cp.address] = { ...cp, createdAt: chain.pools[cp.address]?.createdAt };
   chain.enumeratedAt = now;
   log(`helius: ${found.length} StonkFun pools on-chain (${Object.keys(chain.pools).length} known)`);
+
+  // pre-LaunchLab era (Aug 3 – Sept 4): find the launcher wallet once, recount daily (history is fixed)
+  if (!chain.legacy || now - chain.legacy.countedAt > DAY) {
+    try {
+      const early = Object.values(state.pools)
+        .filter((p) => p.dexId === 'raydium-clmm' && stockMints.has(p.quoteMint) && p.createdAt >= STONKFUN.launch - DAY && p.createdAt < STONKFUN.launchlab - DAY)
+        .sort((a, b) => (b.vol24 ?? 0) - (a.vol24 ?? 0))
+        .map((p) => p.address);
+      const wallet = chain.legacy?.wallet ?? (await discoverLauncher(early))?.wallet;
+      if (wallet) {
+        const counted = await launchesPerDay(wallet, STONKFUN.launch, STONKFUN.launchlab - DAY);
+        chain.legacy = { wallet, ...counted, countedAt: now };
+        log(`helius: ${counted.total} launcher-wallet transactions Aug 3 – Sept 4`);
+      } else log(`helius: pre-LaunchLab launches not counted (${early.length} early pools known)`);
+    } catch (e) {
+      log(`helius: legacy count failed: ${(e as Error).message}`);
+    }
+  }
 
   // creation times for new pools
   const active = new Set(Object.entries(chain.stats).filter(([, v]) => (v.vol24 ?? 0) > 0).map(([m]) => m));
@@ -451,11 +471,12 @@ async function main() {
         totalPools: chainPools.length,
         datedPools: dated.length,
         // exact launches per UTC day from on-chain creation times
+        legacyTotal: state.chain!.legacy?.total ?? 0,
         createdByDay: dated.reduce<Record<string, number>>((acc, p) => {
           const d = String(Math.floor(p.createdAt! / DAY) * DAY);
           acc[d] = (acc[d] ?? 0) + 1;
           return acc;
-        }, {}),
+        }, { ...(state.chain!.legacy?.byDay ?? {}) }),
       }
     : undefined;
   const built = buildArchive(records, bars, state.tracked, quoteAssets, now, state.platform, chainInfo);

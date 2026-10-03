@@ -165,7 +165,7 @@ export interface Platform {
   totalAllTime?: number;
 }
 
-export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number, platform?: Platform | null, chain?: { totalPools: number; datedPools: number; createdByDay: Record<string, number> }): BuiltArchive {
+export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[]>, poolTracked: Tracked, quotes: QuoteAsset[], now: number, platform?: Platform | null, chain?: { totalPools: number; datedPools: number; legacyTotal?: number; createdByDay: Record<string, number> }): BuiltArchive {
   // complete once (nearly) every on-chain market has a launch date
   const complete = Boolean(chain && chain.totalPools > 0 && chain.datedPools / chain.totalPools >= 0.95);
   // StonkFun markets only: tokens with a StonkFun (or post-switch LaunchLab) pool
@@ -246,11 +246,11 @@ export function buildArchive(records: PoolRecord[], poolBars: Map<string, Ohlcv[
       label: 'StonkFun on Solana · via GeckoTerminal',
       archiveStart: start,
       archiveEnd: now,
-      totalMarkets: Math.max(sorted.length, chain?.totalPools ?? 0),
+      totalMarkets: Math.max(sorted.length, (chain?.totalPools ?? 0) + (chain?.legacyTotal ?? 0)),
       quoteAssets: quotes.filter((q) => sorted.some((m) => m.quote === q.symbol)),
       generatedAt: now,
       coverage: complete ? 'complete' : 'partial',
-      chain: chain ? { totalMarkets: chain.totalPools, datedMarkets: chain.datedPools } : undefined,
+      chain: chain ? { totalMarkets: chain.totalPools + (chain.legacyTotal ?? 0), datedMarkets: chain.datedPools + (chain.legacyTotal ?? 0), launchlabFrom: STONKFUN.launchlab, legacyCounted: (chain.legacyTotal ?? 0) > 0 } : undefined,
       platform: platform
         ? { source: platform.source, url: platform.url, volume24h: platform.total24h, volume7d: platform.total7d, volume30d: platform.total30d, volumeAllTime: platform.totalAllTime }
         : undefined,

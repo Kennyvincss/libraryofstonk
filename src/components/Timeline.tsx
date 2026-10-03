@@ -134,7 +134,7 @@ export function Timeline({ value, onChange, onCaption }: { value: number | null;
         </div>
         <div className="tl-stats">
           <div>
-            <b>{fmtNum(period.marketsCreated)}</b> {archive.tracked}launches
+            <b title={archive.launchesKnown(mStart) ? undefined : 'Launches from before StonkFun moved to LaunchLab (Sept 5) are still being counted'}>{archive.launchesKnown(mStart) ? fmtNum(period.marketsCreated) : '—'}</b> {archive.tracked}launches
           </div>
           <div>
             <b>{fmtUsd(period.volumeUsd)}</b> volume

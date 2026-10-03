@@ -143,6 +143,11 @@ export class Archive {
     // with an on-chain enumeration the totals are exact even while dates backfill
     return this.meta.coverage === 'partial' && !this.meta.chain ? 'tracked ' : '';
   }
+  /** false for days whose launch counts aren't available (pre-LaunchLab era not yet counted) */
+  launchesKnown(t: number): boolean {
+    const c = this.meta.chain;
+    return !c || c.legacyCounted || !c.launchlabFrom || t >= c.launchlabFrom - 86_400_000;
+  }
   /** every market ever launched (may exceed the markets loaded into the universe) */
   get marketCount(): number {
     return Math.max(this.meta.totalMarkets, this.markets.length);

@@ -264,3 +264,70 @@ export async function pool<T, R>(items: T[], limit: number, fn: (t: T) => Promis
   );
   return out;
 }
+
+// ── pre-LaunchLab era ────────────────────────────────────────────────────────
+// Before Sept 5, 2026 each StonkFun launch minted the token and opened a
+// one-sided Raydium CLMM pool in a single transaction signed by StonkFun's
+// launcher wallet. We find that wallet as the signer shared by the creation
+// transactions of known early StonkFun pools, then count its launches.
+
+async function oldestSignature(address: string): Promise<{ signature: string; blockTime?: number } | undefined> {
+  let before: string | undefined;
+  let oldest: { signature: string; blockTime?: number } | undefined;
+  for (let page = 0; page < 5; page++) {
+    const sigs = await rpc<{ signature: string; blockTime: number | null }[]>('getSignaturesForAddress', [address, { limit: 1000, ...(before ? { before } : {}) }]);
+    if (!sigs.length) break;
+    const last = sigs[sigs.length - 1];
+    oldest = { signature: last.signature, blockTime: last.blockTime ? last.blockTime * 1000 : undefined };
+    if (sigs.length < 1000) break;
+    before = last.signature;
+  }
+  return oldest;
+}
+
+/** The wallet that signed (nearly) every sample pool's creation transaction. */
+export async function discoverLauncher(samplePools: string[]): Promise<{ wallet: string; agree: number; samples: number } | undefined> {
+  const counts = new Map<string, number>();
+  let n = 0;
+  for (const pool of samplePools.slice(0, 12)) {
+    const first = await oldestSignature(pool);
+    if (!first) continue;
+    const tx = await rpc<{ transaction?: { message?: { accountKeys?: { pubkey: string; signer: boolean }[] } } } | null>('getTransaction', [
+      first.signature,
+      { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 },
+    ]);
+    const signers = (tx?.transaction?.message?.accountKeys ?? []).filter((k) => k.signer).map((k) => k.pubkey);
+    if (!signers.length) continue;
+    n++;
+    for (const s of new Set(signers)) counts.set(s, (counts.get(s) ?? 0) + 1);
+  }
+  const best = [...counts].sort((a, b) => b[1] - a[1])[0];
+  if (!best || n < 3 || best[1] < Math.max(3, Math.ceil(n * 0.6))) {
+    log(`helius: no shared launcher wallet across ${n} early pools (${[...counts].slice(0, 5).map(([w, c]) => `${w.slice(0, 6)}…×${c}`).join(', ')})`);
+    return undefined;
+  }
+  log(`helius: StonkFun launcher wallet ${best[0]} signed ${best[1]} of ${n} early pool creations`);
+  return { wallet: best[0], agree: best[1], samples: n };
+}
+
+/** Successful transactions of `wallet` in [from, to), counted per UTC day. */
+export async function launchesPerDay(wallet: string, from: number, to: number): Promise<{ byDay: Record<string, number>; total: number }> {
+  const byDay: Record<string, number> = {};
+  let total = 0;
+  let before: string | undefined;
+  for (let page = 0; page < 400; page++) {
+    const sigs = await rpc<{ signature: string; blockTime: number | null; err: unknown }[]>('getSignaturesForAddress', [wallet, { limit: 1000, ...(before ? { before } : {}) }]);
+    if (!sigs.length) break;
+    for (const s of sigs) {
+      const t = (s.blockTime ?? 0) * 1000;
+      if (s.err || t < from || t >= to) continue;
+      const day = String(Math.floor(t / 86_400_000) * 86_400_000);
+      byDay[day] = (byDay[day] ?? 0) + 1;
+      total++;
+    }
+    const last = sigs[sigs.length - 1];
+    if ((last.blockTime ?? 0) * 1000 < from || sigs.length < 1000) break;
+    before = last.signature;
+  }
+  return { byDay, total };
+}

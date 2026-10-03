@@ -65,7 +65,12 @@ export function dayLine(a: Archive, f: DayFacts): string {
   const tr = a.tracked; // 'tracked ' when the market list is partial
   const parts: string[] = [];
   if (f.launches === 0 && f.volumeUsd < 1) return `${date}. Silence on StonkFun.`;
+  if (!a.launchesKnown(f.t) && f.volumeUsd < 1) return `${date}.`;
 
+  if (!a.launchesKnown(f.t)) {
+    // launch counts for this era aren't available yet; say only what we know
+    parts.push(`${date}. ${sayUsd(f.volumeUsd)} traded across StonkFun.`);
+  } else
   parts.push(
     pick(
       [

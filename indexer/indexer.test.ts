@@ -139,7 +139,7 @@ describe('archive build', () => {
     const partial = buildArchive(recs, bars, tracked, [], NOW, null, { totalPools: 158_372, datedPools: 2_247, createdByDay });
     expect(partial.meta.totalMarkets).toBe(158_372);
     expect(partial.meta.coverage).toBe('partial');
-    expect(partial.meta.chain).toEqual({ totalMarkets: 158_372, datedMarkets: 2_247 });
+    expect(partial.meta.chain).toMatchObject({ totalMarkets: 158_372, datedMarkets: 2_247, legacyCounted: false });
     expect(partial.ecosystem.find((e) => e.t === day('2026-09-01'))!.marketsCreated).toBe(1200);
     const a = new Archive(partial.meta, partial.markets, partial.ecosystem);
     expect(a.marketCount).toBe(158_372);

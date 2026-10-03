@@ -217,7 +217,7 @@ export interface SourceMeta {
    */
   coverage?: 'complete' | 'partial';
   /** on-chain enumeration: exact market count and how many have launch dates yet */
-  chain?: { totalMarkets: number; datedMarkets: number };
+  chain?: { totalMarkets: number; datedMarkets: number; launchlabFrom?: number; legacyCounted?: boolean };
 }
 
 /** Progressive loading tiers for the universe. */
