@@ -32,6 +32,9 @@ export function MomentsPage() {
         <p className="lede">
           A Moment is a measurable anomaly: a burst of launches around one idea, a quote asset stampede, a market that swallowed a whole day’s volume, an ecosystem-wide crash and the comeback after it.
         </p>
+        <Link to="/rewind" className="btn primary" style={{ marginTop: 18 }}>
+          ▶ Play the rewind
+        </Link>
       </header>
 
       <div className="river" aria-label="Moments over time">

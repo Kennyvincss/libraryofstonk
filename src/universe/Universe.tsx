@@ -18,9 +18,11 @@ export interface UniverseProps {
   controls?: boolean;
   className?: string;
   initialZoom?: number;
+  /** change this value to fly back to the full view */
+  fitKey?: string | number;
 }
 
-export function Universe({ mode, highlight, fitHighlight, filter, activity, focusId, focusCluster, onSelect, onCamera, controls, className, initialZoom }: UniverseProps) {
+export function Universe({ mode, highlight, fitHighlight, filter, activity, focusId, focusCluster, onSelect, onCamera, controls, className, initialZoom, fitKey }: UniverseProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const r = useRef<UniverseRenderer | null>(null);
   const { layout, archive } = useArchive();
@@ -49,6 +51,10 @@ export function Universe({ mode, highlight, fitHighlight, filter, activity, focu
   }, [layout]);
 
   useEffect(() => r.current?.setMode(mode), [mode]);
+  useEffect(() => {
+    if (fitKey !== undefined) r.current?.fit(false, initialZoom ?? 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitKey]);
   useEffect(() => r.current?.setHighlight(highlight ?? null, fitHighlight), [highlight, fitHighlight]);
   useEffect(() => r.current?.setFilter(filter ?? null), [filter]);
   useEffect(() => r.current?.setActivity(activity?.at ?? null, activity?.map ?? null), [activity]);

@@ -15,7 +15,7 @@ export function Nav() {
   const { openSearch, openSurprise } = useUi();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
-  const overlay = loc.pathname === '/' || loc.pathname === '/universe';
+  const overlay = loc.pathname === '/' || loc.pathname === '/universe' || loc.pathname === '/rewind';
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const on = () => setScrolled(window.scrollY > 40);

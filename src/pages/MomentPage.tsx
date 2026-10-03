@@ -43,6 +43,11 @@ export function MomentPage() {
           <div className="mp-when">
             {fmtDate(mo.start)} → {fmtDate(mo.end)} · {fmtDuration(Math.max(3_600_000, mo.end - mo.start))}
           </div>
+          {mo.status === 'approved' && (
+            <Link to={`/rewind?from=${encodeURIComponent(mo.id)}`} className="btn ghost sm" style={{ marginTop: 14 }}>
+              ▶ Play the rewind from here
+            </Link>
+          )}
         </div>
       </section>
 

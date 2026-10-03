@@ -15,6 +15,7 @@ import { MarketPage } from './pages/MarketPage';
 import { ConstellationPage } from './pages/ConstellationPage';
 import { AboutPage } from './pages/AboutPage';
 import { NotFound } from './pages/NotFound';
+import { RewindPage } from './pages/RewindPage';
 
 export function App() {
   const { status, progress, error } = useArchiveState();
@@ -42,6 +43,7 @@ export function App() {
               <Route path="/market/:id" element={<MarketPage />} />
               <Route path="/c/:kind/:key" element={<ConstellationPage />} />
               <Route path="/about" element={<AboutPage />} />
+              <Route path="/rewind" element={<RewindPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>

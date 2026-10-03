@@ -46,6 +46,9 @@ export function Home() {
               Surprise me
             </button>
           </div>
+          <Link to="/rewind" className="rewind-link">
+            <span className="rw-play-ico">▶</span> Watch the rewind <em>· StonkFun history in {archive.publicMoments.length + 2} scenes</em>
+          </Link>
           <div className="hero-hint">drag to wander · pinch or ctrl+scroll to zoom · click any star</div>
         </div>
         <Link to={`/market/${daily.id}`} className="daily">
