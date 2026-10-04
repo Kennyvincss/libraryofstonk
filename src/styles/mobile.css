@@ -1,0 +1,428 @@
+/*
+ * Phone layout (≤ 640px). Loaded last so it can tighten every page in one
+ * place: smaller type and spacing, one column, players and panels that fit
+ * the screen, and text that sits on a solid backdrop instead of the starfield.
+ */
+@media (max-width: 640px) {
+  :root {
+    --nav-h: 56px;
+  }
+
+  /* ── global rhythm ─────────────────────────────────────────── */
+  .nav-search,
+  .nav-dice {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+  .logo-mark {
+    transform: scale(0.85);
+  }
+  .page-head {
+    padding: 28px 16px 8px;
+  }
+  .page-head h1 {
+    font-size: clamp(1.75rem, 8.4vw, 2.2rem);
+    line-height: 1.08;
+  }
+  .lede {
+    font-size: 1.02rem;
+    line-height: 1.45;
+    margin-top: 10px;
+  }
+  .kicker {
+    font-size: 10px;
+  }
+  .band {
+    padding: 28px 16px;
+  }
+  .band-head h2 {
+    font-size: 1.3rem;
+  }
+  .btn {
+    padding: 11px 16px;
+    font-size: 10.5px;
+  }
+  .btn.lg {
+    padding: 14px 20px;
+    font-size: 12px;
+  }
+  .btn.sm {
+    padding: 8px 12px;
+    font-size: 10px;
+  }
+  .count {
+    font-size: 1.6rem;
+  }
+  .empty-note {
+    font-size: 13px;
+    margin: 0;
+  }
+  /* horizontal scrollers: no visible bar, snap to cards */
+  .swipe,
+  .chips,
+  .tabs {
+    scrollbar-width: none;
+  }
+  .swipe::-webkit-scrollbar,
+  .chips::-webkit-scrollbar,
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ── rewind (home) ─────────────────────────────────────────── */
+  .rw-top {
+    top: calc(var(--nav-h) + 6px);
+    left: 12px;
+    right: 12px;
+  }
+  .rw-brand {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+  }
+  .rw-top .btn {
+    padding: 7px 11px;
+    font-size: 9.5px;
+  }
+  .rw-sound-long {
+    display: none;
+  }
+  .rw-sound-short {
+    display: inline;
+  }
+  .rw-vignette {
+    background: linear-gradient(to top, rgba(5, 4, 11, 0.98) 0%, rgba(5, 4, 11, 0.9) 38%, rgba(5, 4, 11, 0.35) 62%, transparent 80%);
+  }
+  .rw-caption {
+    left: 16px;
+    right: 16px;
+    bottom: 96px;
+    gap: 8px;
+    max-height: 52vh;
+    overflow-y: auto;
+  }
+  .rw-eyebrow {
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+  }
+  .rw-title {
+    font-size: clamp(1.6rem, 8vw, 2.1rem);
+    line-height: 1.05;
+  }
+  .rw-body {
+    font-size: 1.02rem;
+    line-height: 1.4;
+  }
+  .rw-caption.rk-runner .rw-title,
+  .rw-caption.rk-news .rw-title {
+    font-size: clamp(1.4rem, 7vw, 1.8rem);
+  }
+  .rw-caption.rk-runner .rw-body,
+  .rw-caption.rk-news .rw-body {
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .rw-caption .story-img {
+    width: 84px;
+  }
+  .rw-caption .story-callout {
+    padding: 8px 12px;
+  }
+  .rw-stats {
+    gap: 16px;
+  }
+  .rw-stats dd {
+    font-size: 1rem;
+  }
+  .rw-player {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    padding: 8px 10px 6px;
+    border-radius: 16px;
+  }
+  .rw-controls {
+    justify-content: space-between;
+    gap: 2px;
+    margin-top: 6px;
+  }
+  .rw-controls .rw-restart,
+  .rw-controls .rw-end,
+  .rw-controls .rw-shuffle,
+  .rw-player .rw-date {
+    display: none;
+  }
+  .rw-controls .rw-play {
+    min-width: 44px;
+    height: 44px;
+  }
+  .rw-controls .rw-count {
+    display: inline;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  /* ── universe + time travel ────────────────────────────────── */
+  .navigator {
+    top: calc(var(--nav-h) + 8px);
+    left: 10px;
+  }
+  .tt-overlay {
+    top: calc(var(--nav-h) + 54px);
+    width: calc(100% - 32px);
+    gap: 6px;
+  }
+  .tt-date {
+    font-size: clamp(1.4rem, 7vw, 1.8rem);
+    white-space: nowrap;
+  }
+  .tt-moment {
+    padding: 6px 12px;
+  }
+  .tt-moment b {
+    font-size: 13px;
+  }
+  .tt-caption {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+  .timeline {
+    padding: 10px 12px;
+    border-radius: 16px;
+  }
+  .tl-summary {
+    gap: 4px 12px;
+  }
+  .tl-month {
+    font-size: 13px;
+  }
+  .tl-stats {
+    font-size: 11px;
+    gap: 2px 10px;
+  }
+  .tl-stats > :nth-child(n + 3),
+  .tl-existing {
+    display: none;
+  }
+
+  /* ── moments list ──────────────────────────────────────────── */
+  .moments-page .page-head .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .moments-page .page-head .row .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .river {
+    margin: 24px 16px 8px;
+    overflow: hidden;
+  }
+  .river-tip {
+    display: none;
+  }
+  .chips.center {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 4px 16px 8px;
+    margin: 0;
+  }
+  .chips .chip {
+    flex: none;
+  }
+  .moment-grid {
+    gap: 14px;
+  }
+  .mo-art,
+  .moment-card.lg .mo-art {
+    height: 96px;
+  }
+  .mo-body {
+    padding: 14px 16px 16px;
+  }
+  .mo-title {
+    font-size: 1.15rem;
+  }
+  .mo-tagline {
+    font-size: 0.98rem;
+  }
+
+  /* ── moment page: map as a banner, story on solid ground ───── */
+  .mp-hero,
+  .mp-hero.short {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .mp-universe {
+    position: relative !important;
+    height: 34vh;
+    min-height: 220px;
+  }
+  .mp-hero::after {
+    bottom: auto;
+    height: 34vh;
+    min-height: 220px;
+    background: linear-gradient(to top, var(--bg) 0%, transparent 45%);
+  }
+  .mp-overlay {
+    position: relative;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    padding: 0 16px 8px;
+    margin-top: -12px;
+  }
+  .mp-overlay .back {
+    margin-bottom: 6px;
+  }
+  .mp-overlay h1 {
+    font-size: clamp(1.7rem, 8.5vw, 2.3rem);
+    line-height: 1.05;
+  }
+  .mp-body,
+  .mp-tagline {
+    font-size: 15px;
+    line-height: 1.5;
+    text-shadow: none;
+  }
+  .mp-overlay .story-img {
+    width: 96px;
+  }
+  .mp-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+  .mp-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 0 16px;
+    margin-top: 16px;
+  }
+  .mp-stats > div {
+    padding: 12px;
+  }
+  .mp-stats b {
+    font-size: 1.05rem;
+  }
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+  .mp-travel {
+    padding: 0 16px;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .rw-player.mo-player {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    padding: 8px 12px;
+  }
+  .mo-player .rw-date {
+    display: none;
+  }
+  .moment-page {
+    padding-bottom: 96px;
+  }
+
+  /* ── market page ───────────────────────────────────────────── */
+  .mk-hero {
+    padding: 24px 16px 8px;
+  }
+  .mk-id {
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+  }
+  .mk-id > :first-child {
+    width: 64px;
+    height: 64px;
+    flex: none;
+  }
+  .mk-ticker {
+    font-size: clamp(2rem, 10vw, 2.6rem);
+    margin-top: 2px;
+    word-break: break-word;
+  }
+  .mk-pair {
+    font-size: 14px;
+  }
+  .mk-name {
+    font-size: 15px;
+  }
+  .mk-badges {
+    margin-top: 14px;
+    gap: 6px;
+  }
+  .mk-badge {
+    font-size: 11px;
+    padding: 4px 10px 4px 4px;
+  }
+  .mk-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .mk-actions .btn {
+    justify-content: center;
+  }
+  .mk-actions .btn.primary {
+    grid-column: 1 / -1;
+  }
+  .mk-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 0 16px;
+  }
+  .stat {
+    padding: 11px 13px;
+    border-radius: 12px;
+  }
+  .stat-k {
+    font-size: 9.5px;
+  }
+  .stat-v {
+    font-size: 1.1rem;
+  }
+  .related-rows > * {
+    min-width: 0;
+  }
+
+  /* ── explore / legends / about ─────────────────────────────── */
+  .legends-page .band-head {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .legends-page .band-head .count {
+    font-size: 1.3rem;
+    margin-top: 4px;
+  }
+  .legend-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .badge-tile {
+    width: 160px;
+  }
+  .about-grid {
+    grid-template-columns: 1fr;
+    padding: 8px 16px;
+    gap: 14px;
+  }
+  .about-grid article {
+    padding: 18px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .keys li {
+    font-size: 12px;
+  }
+}

@@ -28,11 +28,15 @@ export function LegendsPage() {
           </div>
           <span className="count">{fmtNum(legends.length)}</span>
         </header>
-        <div className="legend-grid">
-          {legends.map((m, i) => (
-            <MarketCard key={m.id} m={m} variant="legend" index={i} />
-          ))}
-        </div>
+        {legends.length ? (
+          <div className="legend-grid">
+            {legends.map((m, i) => (
+              <MarketCard key={m.id} m={m} variant="legend" index={i} />
+            ))}
+          </div>
+        ) : (
+          <p className="muted empty-note">No market has crossed this bar yet. The first one will appear here.</p>
+        )}
       </section>
 
       {ORDER.map((b) => {

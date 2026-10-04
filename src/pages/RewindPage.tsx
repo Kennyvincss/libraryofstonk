@@ -214,7 +214,8 @@ export function RewindPage() {
                 setSpeakNonce((n) => n + 1);
               }}
             >
-              🔊 Click to hear the narration
+              🔊 <span className="rw-sound-long">Click to hear the narration</span>
+              <span className="rw-sound-short">Sound on</span>
             </button>
           )}
           <Link to="/universe" className="btn ghost sm">
@@ -266,7 +267,7 @@ export function RewindPage() {
           ))}
         </div>
         <div className="rw-controls">
-          <button onClick={() => go(0)} aria-label="Restart" title="Restart">
+          <button className="rw-restart" onClick={() => go(0)} aria-label="Restart" title="Restart">
             ⏮
           </button>
           <button onClick={() => go(elapsed > 1500 ? idx : idx - 1)} aria-label="Previous scene" title="Previous (←)">
@@ -288,7 +289,7 @@ export function RewindPage() {
           <button onClick={() => go(idx + 1)} aria-label="Next scene" title="Next (→)" disabled={idx === scenes.length - 1}>
             ▶▶
           </button>
-          <button onClick={() => go(scenes.length - 1)} aria-label="Skip to the end" title="Skip to the end">
+          <button className="rw-end" onClick={() => go(scenes.length - 1)} aria-label="Skip to the end" title="Skip to the end">
             ⏭
           </button>
           <button
@@ -300,6 +301,7 @@ export function RewindPage() {
                 setPlaying(true);
               }
             }}
+            className="rw-shuffle"
             aria-label="Shuffle"
             title="Random moment"
           >
