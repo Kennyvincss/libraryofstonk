@@ -95,7 +95,7 @@ function GenSigil({ m, size }: { m: Market; size: number }) {
       </defs>
       <circle cx="50" cy="50" r="48" fill={`hsla(${hue},60%,20%,0.6)`} stroke={`hsla(${hue},100%,70%,0.4)`} />
       <polygon points={path} fill={`url(#sg-${m.id.slice(0, 8)})`} opacity="0.9" />
-      <text x="50" y="57" textAnchor="middle" fontSize="20" fontWeight="800" fill="#07060f" fontFamily="Unbounded, sans-serif">
+      <text x="50" y="57" textAnchor="middle" fontSize="20" fontWeight="800" fill="#0b1518" fontFamily="Unbounded, sans-serif">
         {m.ticker.slice(0, 2)}
       </text>
     </svg>

@@ -74,7 +74,7 @@ export function Universe({ mode, highlight, fitHighlight, filter, activity, focu
   useEffect(
     () =>
       live.listen((e) => {
-        if (e.marketId) r.current?.pulse(e.marketId, e.kind === 'launch' ? '#5ee7ff' : e.kind === 'unusual' ? '#ff4fa3' : '#d4ff3a');
+        if (e.marketId) r.current?.pulse(e.marketId, e.kind === 'launch' ? '#5ee7ff' : e.kind === 'unusual' ? '#ff4fa3' : '#73adc6');
       }),
     [live],
   );

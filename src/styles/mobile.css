@@ -93,7 +93,7 @@
     display: inline;
   }
   .rw-vignette {
-    background: linear-gradient(to top, rgba(5, 4, 11, 0.98) 0%, rgba(5, 4, 11, 0.9) 38%, rgba(5, 4, 11, 0.35) 62%, transparent 80%);
+    background: linear-gradient(to top, rgba(10, 18, 21, 0.98) 0%, rgba(10, 18, 21, 0.9) 38%, rgba(10, 18, 21, 0.35) 62%, transparent 80%);
   }
   .rw-caption {
     left: 16px;

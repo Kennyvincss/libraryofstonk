@@ -264,7 +264,7 @@ export class UniverseRenderer {
     this.computeTargets();
   }
 
-  pulse(id: string, color = '#d4ff3a') {
+  pulse(id: string, color = '#73adc6') {
     const k = this.layout.nodes.findIndex((n) => n.id === id);
     if (k >= 0) this.pulses.push({ k, t: performance.now(), color });
   }
@@ -616,7 +616,7 @@ export class UniverseRenderer {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#05040b';
+    ctx.fillStyle = '#0a1215';
     ctx.fillRect(0, 0, w, h);
 
     // parallax starfield
@@ -624,7 +624,7 @@ export class UniverseRenderer {
       const px = (((s.x * w - this.cam.x * s.p * this.cam.z * 0.4) % w) + w) % w;
       const py = (((s.y * h - this.cam.y * s.p * this.cam.z * 0.4) % h) + h) % h;
       ctx.globalAlpha = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(t * 0.9 + s.tw));
-      ctx.fillStyle = '#cfd6ff';
+      ctx.fillStyle = '#cfe0e6';
       ctx.fillRect(px, py, s.s, s.s);
     }
 
@@ -646,7 +646,7 @@ export class UniverseRenderer {
     if (this.highlightEdges.length) {
       ctx.globalCompositeOperation = 'lighter';
       ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(212,255,58,0.35)';
+      ctx.strokeStyle = 'rgba(115, 173, 198,0.35)';
       ctx.setLineDash([]);
       ctx.beginPath();
       for (const [a, b] of this.highlightEdges) {
@@ -726,7 +726,7 @@ export class UniverseRenderer {
       ctx.drawImage(this.glowFor(n.hue, n.kind), sx - S / 2, sy - S / 2, S, S);
       if (lit && rr < 6) {
         ctx.globalAlpha = 0.7;
-        ctx.strokeStyle = 'rgba(212,255,58,0.8)';
+        ctx.strokeStyle = 'rgba(115, 173, 198,0.8)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.arc(sx, sy, Math.max(5, rr * 1.8), 0, TAU);
@@ -875,7 +875,7 @@ export class UniverseRenderer {
         ctx.fillText(c.label, sx, ly);
         ctx.globalAlpha = ga * 0.55;
         ctx.font = `500 9.5px "JetBrains Mono", monospace`;
-        ctx.fillStyle = '#b8b3dc';
+        ctx.fillStyle = '#a9bcc2';
         ctx.fillText(`${c.count.toLocaleString('en-US')} MARKETS`, sx, ly + 14);
       }
     }
@@ -916,7 +916,7 @@ export class UniverseRenderer {
       occupied.add(key);
       drawn++;
       ctx.globalAlpha = 0.85;
-      ctx.fillStyle = n.kind === 'legendary' ? '#ffd772' : n.kind === 'crashed' ? '#ff8a8a' : '#e9e6ff';
+      ctx.fillStyle = n.kind === 'legendary' ? '#ffd772' : n.kind === 'crashed' ? '#ff8a8a' : '#e4eef1';
       ctx.fillText(`$${n.ticker}`, sx + rr + 4, sy + 3.5);
     }
     void t;
