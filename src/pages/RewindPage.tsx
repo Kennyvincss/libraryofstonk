@@ -8,6 +8,8 @@ import { fmtDate, fmtNum, fmtUsd } from '../lib/format';
 import { narrator } from '../lib/narrator';
 import { sceneLine } from '../engine/narration';
 import { useVoice } from '../hooks/useVoice';
+import { useMusic, useSoundtrack } from '../hooks/useMusic';
+import { soundtrack } from '../lib/soundtrack';
 import { ShareButton, StoryCallout, StoryImage } from '../components/Story';
 
 const DAY = 86_400_000;
@@ -90,6 +92,12 @@ export function RewindPage() {
   const cache = useRef(new Map<number, Map<string, number>>());
   const scene = scenes[idx];
   const voice = useVoice();
+  const music = useMusic();
+  useSoundtrack(playing && music.on);
+  // a cinematic hit on every scene change while playing
+  useEffect(() => {
+    if (playing) soundtrack.accent(scene.kind === 'moment' ? 1 : 0.6);
+  }, [scene, playing]);
   // true once the narrator has finished this scene's line (or voice is off)
   const spokenRef = useRef(true);
   // browsers only allow speech after the visitor has interacted with the page
@@ -311,6 +319,11 @@ export function RewindPage() {
             <Link to={`/moments/${scene.moment.id}`} onClick={() => setPlaying(false)} className="rw-open" aria-label="Open this moment" title="Open this moment">
               +
             </Link>
+          )}
+{music.supported && (
+            <button className={`rw-voice rw-music ${music.on ? 'on' : ''}`} onClick={music.toggle} aria-label={music.on ? 'Mute soundtrack' : 'Turn on soundtrack'} title={music.on ? 'Soundtrack on' : 'Soundtrack off'}>
+              {music.on ? '♪' : <s>♪</s>}
+            </button>
           )}
           {voice.supported && (
             <button className={voice.on ? 'rw-voice on' : 'rw-voice'} onClick={voice.toggle} aria-label={voice.on ? 'Mute voiceover' : 'Turn on voiceover'} title={voice.on ? 'Voiceover on' : 'Voiceover off'}>

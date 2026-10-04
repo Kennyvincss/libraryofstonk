@@ -5,6 +5,8 @@ import { fmtDate, fmtNum, fmtUsd, monthLabel } from '../lib/format';
 import { MOMENT_KIND } from './MomentCard';
 import { buildDayIndex, dayHeadline, dayLine } from '../engine/narration';
 import { narrator } from '../lib/narrator';
+import { useMusic, useSoundtrack } from '../hooks/useMusic';
+import { soundtrack } from '../lib/soundtrack';
 import { useVoice } from '../hooks/useVoice';
 
 const DAY = 86_400_000;
@@ -26,6 +28,8 @@ export function Timeline({ value, onChange, onCaption }: { value: number | null;
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
   const voice = useVoice();
+  const music = useMusic();
+  useSoundtrack(playing && music.on);
   const facts = useMemo(() => buildDayIndex(archive), [archive]);
   // callbacks via refs: a parent re-render must not restart the current day
   const cbs = useRef({ onChange, onCaption });
@@ -76,6 +80,7 @@ export function Timeline({ value, onChange, onCaption }: { value: number | null;
     const waitVoice = voice.on && speed <= 2;
     let spoken = !waitVoice;
     const f = facts.get(day);
+    if (f?.moments.length) soundtrack.accent(0.7);
     const advance = () => {
       if (!alive || !timeUp || !spoken) return;
       const next = day + DAY;
@@ -228,6 +233,11 @@ export function Timeline({ value, onChange, onCaption }: { value: number | null;
         <button className="tl-speed" onClick={() => setSpeed((v) => SPEEDS[(SPEEDS.indexOf(v) + 1) % SPEEDS.length])} title="Playback speed">
           {speed}×<em>{DAY_HOLD_MS / 1000 / speed}s/day</em>
         </button>
+{music.supported && (
+          <button className={`tl-voice tl-music ${music.on ? 'on' : ''}`} onClick={music.toggle} aria-label={music.on ? 'Mute soundtrack' : 'Turn on soundtrack'} title={music.on ? 'Soundtrack on' : 'Soundtrack off'}>
+            {music.on ? '♪' : <s>♪</s>}
+          </button>
+        )}
         {voice.supported && (
           <button className={`tl-voice ${voice.on ? 'on' : ''}`} onClick={voice.toggle} aria-label={voice.on ? 'Mute voiceover' : 'Turn on voiceover'} title={voice.on ? 'Voiceover on' : 'Voiceover off'}>
             {voice.on ? '🔊' : '🔇'}

@@ -5,6 +5,8 @@ import type { Moment } from '../data/types';
 import { narrator } from '../lib/narrator';
 import { sceneLine } from '../engine/narration';
 import { useVoice } from '../hooks/useVoice';
+import { useMusic, useSoundtrack } from '../hooks/useMusic';
+import { soundtrack } from '../lib/soundtrack';
 import { fmtDate } from '../lib/format';
 
 const SCENE_MS = 9000;
@@ -19,6 +21,12 @@ export function MomentPlayer({ mo, order }: { mo: Moment; order: Moment[] }) {
   const [playing, setPlaying] = useState(params.get('play') === '1');
   const [elapsed, setElapsed] = useState(0);
   const voice = useVoice();
+  const music = useMusic();
+  useSoundtrack(playing && music.on);
+  // a hit on every new moment while playing
+  useEffect(() => {
+    if (playing) soundtrack.accent(0.8);
+  }, [mo.id, playing]);
   const spokenRef = useRef(true);
   const i = order.findIndex((m) => m.id === mo.id);
   const go = (j: number, play = playing) => {
@@ -106,6 +114,11 @@ export function MomentPlayer({ mo, order }: { mo: Moment; order: Moment[] }) {
         >
           ⤨
         </button>
+{music.supported && (
+          <button className={`rw-voice rw-music ${music.on ? 'on' : ''}`} onClick={music.toggle} aria-label={music.on ? 'Mute soundtrack' : 'Turn on soundtrack'} title={music.on ? 'Soundtrack on' : 'Soundtrack off'}>
+            {music.on ? '♪' : <s>♪</s>}
+          </button>
+        )}
         {voice.supported && (
           <button className={voice.on ? 'rw-voice on' : 'rw-voice'} onClick={voice.toggle} aria-label={voice.on ? 'Mute voiceover' : 'Turn on voiceover'} title={voice.on ? 'Voiceover on' : 'Voiceover off'}>
             {voice.on ? '🔊' : '🔇'}
