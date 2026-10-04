@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useUi } from '../hooks/ui';
 import { DemoChip } from './bits';
+import { TipJar } from './TipJar';
 
 const LINKS = [
   ['/universe', 'Universe'],
@@ -42,6 +43,7 @@ export function Nav() {
       </nav>
       <div className="nav-right">
         <DemoChip />
+        <TipJar />
         <button className="nav-search" onClick={() => openSearch()} aria-label="Search the archive">
           <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden>
             <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2.2" />
