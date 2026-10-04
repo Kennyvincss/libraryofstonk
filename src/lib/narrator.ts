@@ -18,15 +18,36 @@ const PREFERRED = [/Google UK English Male/i, /Daniel/i, /Microsoft Guy/i, /Goog
 function pickVoice() {
   if (!synth) return;
   const voices = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith('en'));
-  for (const re of PREFERRED) {
-    const v = voices.find((x) => re.test(x.name));
-    if (v) return (voice = v);
+  // on-device voices start instantly; network voices (e.g. "Google UK English")
+  // add a noticeable delay before every line, so they are a last resort
+  const local = voices.filter((v) => v.localService);
+  for (const pool of [local, voices]) {
+    for (const re of PREFERRED) {
+      const v = pool.find((x) => re.test(x.name));
+      if (v) return (voice = v);
+    }
+    const d = pool.find((v) => v.default) ?? pool[0];
+    if (d) return (voice = d);
   }
-  voice = voices.find((v) => v.default) ?? voices[0] ?? null;
+  voice = null;
 }
 if (synth) {
   pickVoice();
   synth.addEventListener?.('voiceschanged', pickVoice);
+  // warm the speech engine on the first interaction so the first real line starts at once
+  const warm = () => {
+    window.removeEventListener('pointerdown', warm);
+    window.removeEventListener('keydown', warm);
+    // after this tick, so a player that speaks in response to the same tap goes first
+    setTimeout(() => {
+      if (current || synth.speaking || synth.pending) return;
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      synth.speak(u);
+    }, 0);
+  };
+  window.addEventListener('pointerdown', warm);
+  window.addEventListener('keydown', warm);
 }
 
 function emit(s: boolean) {
@@ -36,12 +57,16 @@ function emit(s: boolean) {
 export const narrator = {
   supported: Boolean(synth),
 
-  speak(text: string, onEnd?: () => void) {
+  /** `onStart` fires when audio actually begins (or at once if it never reports it). */
+  speak(text: string, onEnd?: () => void, onStart?: () => void) {
     if (!synth) {
+      onStart?.();
       onEnd?.();
       return;
     }
-    this.stop();
+    // cancel only when something is queued: Chrome stalls a line spoken straight after cancel()
+    if (current || synth.speaking || synth.pending) this.stop();
+    if (synth.paused) synth.resume();
     const u = new SpeechSynthesisUtterance(text);
     if (voice) u.voice = voice;
     u.rate = 1.04;
@@ -57,8 +82,17 @@ export const narrator = {
       }
       if (!cancelled.has(u)) onEnd?.();
     };
-    u.onend = finish;
-    u.onerror = finish;
+    let started = false;
+    const begin = () => {
+      if (started) return;
+      started = true;
+      onStart?.();
+    };
+    u.onstart = begin;
+    u.onend = () => (begin(), finish());
+    u.onerror = () => (begin(), finish());
+    // engines that never report onstart (or are blocked) must not hold the scene
+    setTimeout(begin, 1200);
     current = u;
     emit(true);
     synth.speak(u);

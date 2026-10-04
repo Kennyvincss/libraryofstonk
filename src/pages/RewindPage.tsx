@@ -100,6 +100,9 @@ export function RewindPage() {
   }, [scene, playing]);
   // true once the narrator has finished this scene's line (or voice is off)
   const spokenRef = useRef(true);
+  // false between asking the narrator to speak and the audio actually starting:
+  // the scene clock waits so picture and voice begin together
+  const startedRef = useRef(true);
   // browsers only allow speech after the visitor has interacted with the page
   const [needsTap, setNeedsTap] = useState(() => !(navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive);
   const [speakNonce, setSpeakNonce] = useState(0);
@@ -123,13 +126,26 @@ export function RewindPage() {
     if (!playing || !voice.on) {
       narrator.stop();
       spokenRef.current = true;
+      startedRef.current = true;
       return;
     }
     spokenRef.current = false;
-    narrator.speak(sceneLine(scene.kind, scene.title, scene.body, scene.moment), () => {
-      spokenRef.current = true;
-    });
+    startedRef.current = false;
+    narrator.speak(
+      sceneLine(scene.kind, scene.title, scene.body, scene.moment),
+      () => {
+        spokenRef.current = true;
+      },
+      () => {
+        startedRef.current = true;
+      },
+    );
   }, [scene, playing, voice.on, speakNonce]);
+
+  // turning the sound on (first tap) replays the current scene from its start, in sync with the voice
+  useEffect(() => {
+    if (speakNonce) setElapsed(0);
+  }, [speakNonce]);
 
   const go = useCallback(
     (i: number) => {
@@ -166,8 +182,10 @@ export function RewindPage() {
     let last = performance.now();
     const id = setInterval(() => {
       const now = performance.now();
-      const n = elapsedRef.current + (now - last);
+      const dt = now - last;
       last = now;
+      if (!startedRef.current) return; // the voice hasn't begun yet: hold the scene at its start
+      const n = elapsedRef.current + dt;
       if (n < SCENE_MS) setElapsed(n);
       else if (!spokenRef.current) setElapsed(SCENE_MS); // hold until the narrator finishes
       else if (idx < scenes.length - 1) go(idx + 1);
