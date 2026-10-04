@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useUi } from '../hooks/ui';
 import { DemoChip } from './bits';
 import { TipJar } from './TipJar';
+import { StonkMark } from './StonkMark';
 
 const LINKS = [
   ['/universe', 'Universe'],
@@ -28,7 +29,8 @@ export function Nav() {
     <header className={`nav ${overlay ? 'overlay' : ''} ${overlay && scrolled ? 'solid' : ''}`}>
       <Link to="/" className="logo" onClick={() => setOpen(false)}>
         <span className="logo-mark" aria-hidden>
-          <i />
+          <span className="logo-orbit" />
+          <StonkMark size={15} />
         </span>
         <span className="logo-text">
           STONKFUN<b>ARCHIVE</b>

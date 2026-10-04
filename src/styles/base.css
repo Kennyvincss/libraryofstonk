@@ -311,21 +311,23 @@ kbd {
 .logo-mark {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  border: 1.5px dashed var(--violet);
   display: grid;
   place-items: center;
-  animation: spin 18s linear infinite;
   position: relative;
 }
-.logo-mark i {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--acid);
-  box-shadow: 0 0 14px var(--acid);
+.logo-mark svg {
+  position: relative;
+  filter: drop-shadow(0 0 6px rgba(115, 173, 198, 0.55));
 }
-.logo-mark::after {
+/* the dashed orbit (and its moon) circles the mark; the mark stays upright */
+.logo-orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px dashed var(--violet);
+  animation: spin 18s linear infinite;
+}
+.logo-orbit::after {
   content: '';
   position: absolute;
   top: -3px;
