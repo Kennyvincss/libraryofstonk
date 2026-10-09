@@ -1,0 +1,191 @@
+/*
+ * Simple layer (loaded last). Calms the whole site down without touching
+ * layout or content: one typeface, normal-case labels, flat surfaces,
+ * no glows. Remove this file to get the previous, louder look back.
+ */
+:root {
+  --display: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --serif: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --r: 12px;
+  --r-sm: 8px;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* no shouty labels: sentence case, normal spacing everywhere */
+* {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+.rw-title,
+.tt-date,
+.mk-ticker {
+  font-weight: 700;
+  letter-spacing: -0.02em !important;
+}
+
+/* the "—— LABEL" above every heading goes; section labels stay as plain small text */
+.page-head .kicker {
+  display: none;
+}
+.kicker {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.kicker::before {
+  display: none;
+}
+
+.lede,
+.mp-tagline,
+.mo-tagline,
+.rw-body,
+.mp-body,
+.hero-sub {
+  font-family: inherit;
+}
+.lede {
+  font-size: 16px;
+  color: var(--muted);
+}
+
+/* buttons and chips: plain, no glow, no bounce */
+.btn {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  box-shadow: none !important;
+}
+.btn:hover {
+  transform: none !important;
+}
+.btn.sm {
+  font-size: 13px;
+}
+.chip,
+.tip-tab,
+.nav-links a {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+.nav-links a {
+  border-radius: 8px;
+}
+
+/* surfaces: flat, one border, no gradients or lift */
+.mcard,
+.moment-card,
+.stat,
+.about-grid article,
+.badge-tile,
+.story-callout,
+.timeline,
+.rw-player,
+.navigator,
+.tip-pop {
+  background: var(--bg-2) !important;
+  box-shadow: none !important;
+  border-radius: var(--r);
+}
+.mcard:hover,
+.moment-card:hover,
+.badge-tile:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: var(--line-2);
+}
+.mk-ticker {
+  background: none !important;
+  -webkit-text-fill-color: currentColor;
+  color: var(--text);
+}
+.rw-controls .rw-play,
+.tl-play,
+.pulse-dot,
+.logo-mark svg {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+/* small print reads as text, not as tags */
+.eyebrow,
+.rw-eyebrow,
+.mo-kind,
+.mo-date,
+.mp-kind,
+.stat-k,
+.back,
+.tl-day,
+.mo-callout,
+.story-callout .sc-head,
+.river-month {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* headings at a reading size, not poster size */
+.page-head h1 {
+  font-size: clamp(1.9rem, 3.6vw, 2.8rem);
+}
+.band-head h2,
+.legends-page .band-head h2 {
+  font-size: 1.35rem;
+}
+.count {
+  font-family: inherit;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+/* moment cards: no decorative art block — just the type and date, then the story */
+.moment-card .mo-art {
+  height: auto !important;
+  background: none;
+  border-bottom: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px 0;
+}
+.moment-card .mo-art .mini-const {
+  display: none;
+}
+.moment-card .mo-art .story-img {
+  display: none;
+}
+.mo-kind,
+.mo-date {
+  position: static;
+  padding: 0;
+  border: none !important;
+  background: none;
+  backdrop-filter: none;
+}
+
+/* one accent colour: the pink/purple "special" buttons become plain */
+.btn.dice,
+.nav-dice {
+  background: transparent;
+  border-color: var(--line-2);
+}
+.btn.dice:hover,
+.nav-dice:hover {
+  box-shadow: none;
+  border-color: var(--acid);
+}

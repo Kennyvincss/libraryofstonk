@@ -870,7 +870,7 @@ export class UniverseRenderer {
         if (sx < -100 || sx > w + 100 || ly < -40 || ly > h + 40) continue;
         const big = c.count > 400;
         ctx.globalAlpha = ga * (this.highlight ? 0.45 : 0.95);
-        ctx.font = `800 ${big ? 13 : 11}px Unbounded, system-ui, sans-serif`;
+        ctx.font = `700 ${big ? 13 : 11}px Inter, system-ui, sans-serif`;
         ctx.fillStyle = `hsl(${c.hue},100%,80%)`;
         ctx.fillText(c.label, sx, ly);
         ctx.globalAlpha = ga * 0.55;
