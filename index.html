@@ -6,9 +6,12 @@
     <meta name="theme-color" content="#0a1215" />
     <meta name="description" content="Explore the markets, moments and madness of StonkFun." />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- the archive dataset host: open the connection before the app asks for it -->
+    <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+    <!-- fonts load without blocking the first paint -->
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
     <title>STONKFUN ARCHIVE</title>
   </head>
   <body>

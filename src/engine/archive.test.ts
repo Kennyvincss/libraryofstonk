@@ -135,3 +135,24 @@ describe('format', () => {
     expect(fmtPct(48.21)).toBe('+4,821%');
   });
 });
+
+describe('notability fast paths', () => {
+  test('fast percentiles match the reference, ties included', async () => {
+    const { percentiles } = await import('./notability');
+    const v = Float64Array.from([3, 1, 2, 2, 5, 1, 1, 9, 0, 2]);
+    const ref = (vals: Float64Array) => {
+      const n = vals.length;
+      const idx = Array.from({ length: n }, (_, i) => i).sort((a, b) => vals[a] - vals[b]);
+      const out = new Float64Array(n);
+      let i = 0;
+      while (i < n) {
+        let j = i;
+        while (j + 1 < n && vals[idx[j + 1]] === vals[idx[i]]) j++;
+        for (let k = i; k <= j; k++) out[idx[k]] = (i + j) / 2 / (n - 1);
+        i = j + 1;
+      }
+      return out;
+    };
+    expect([...percentiles(v)]).toEqual([...ref(v)]);
+  });
+});

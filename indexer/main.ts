@@ -25,6 +25,8 @@ import { creationTime, enumeratePools, heliusCalls, heliusEnabled, learnLayouts,
 import { NETWORK, num, parseOhlcv, poolToRecord, tokenMap, type GtList, type GtPool, type GtToken, type Ohlcv, type PoolRecord, type QuoteRef } from '../src/data/live/gecko';
 import { CRYPTO_QUOTE_SPECS, EXCLUDED_MINTS, QUOTE_SPECS, specToQuote } from '../src/data/live/quotes';
 import { STONKFUN, stonkFunMints } from '../src/data/live/stonkfun';
+import { scoreMarkets } from '../src/engine/notability';
+import { detectMoments } from '../src/engine/moments';
 import type { QuoteAsset } from '../src/data/types';
 
 const DAY = 86_400_000;
@@ -563,6 +565,10 @@ async function main() {
   await writeJson(join(OUT, 'v1', 'meta.json'), built.meta);
   await writeJson(join(OUT, 'v1', 'markets.json'), built.markets);
   await writeJson(join(OUT, 'v1', 'ecosystem.json'), built.ecosystem);
+  // moments detected here with the site's own engine, so phones skip the work
+  const first = scoreMarkets(built.markets, now, new Map());
+  const detected = detectMoments({ markets: built.markets, ecosystem: built.ecosystem, score: (i) => first.score[i], start: built.meta.archiveStart });
+  await writeJson(join(OUT, 'v1', 'moments.json'), detected);
   await writeJson(join(OUT, 'v1', 'activity.json'), built.activity);
   await saveChain(state);
   await writeJson(join(OUT, 'cache', 'state.json'), { ...state, chain: state.chain ? { ...state.chain, pools: {}, meta: {}, stats: {}, legacyCache: undefined } : undefined });

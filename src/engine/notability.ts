@@ -35,6 +35,38 @@ export function rawFeatures(m: Market, now: number, momentCount: number): Featur
 /** Percentile rank (0..1) of each value in `values`, ties share rank. */
 export function percentiles(values: Float64Array): Float64Array {
   const n = values.length;
+  const out = new Float64Array(n);
+  if (n === 0) return out;
+  if (values.some(Number.isNaN)) return percentilesSlow(values);
+  // fast path: a native typed-array sort, then each value's tie range by binary search
+  const sorted = Float64Array.from(values).sort();
+  const lower = (v: number) => {
+    let lo = 0, hi = n;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid] < v) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+  const upper = (v: number) => {
+    let lo = 0, hi = n;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid] <= v) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo - 1;
+  };
+  for (let i = 0; i < n; i++) {
+    const v = values[i];
+    out[i] = n > 1 ? (lower(v) + upper(v)) / 2 / (n - 1) : 1;
+  }
+  return out;
+}
+
+function percentilesSlow(values: Float64Array): Float64Array {
+  const n = values.length;
   const idx = Array.from({ length: n }, (_, i) => i).sort((a, b) => values[a] - values[b]);
   const out = new Float64Array(n);
   let i = 0;
@@ -55,15 +87,20 @@ export interface NotabilityResult {
   rank: Int32Array;
 }
 
-export function scoreMarkets(markets: Market[], now: number, momentCounts: Map<string, number>, weights = notabilityWeights): NotabilityResult {
+/**
+ * `reuse`: an earlier result for the same markets, now and weights; only the
+ * moment-dependent feature is recomputed (identical result, half the work).
+ */
+export function scoreMarkets(markets: Market[], now: number, momentCounts: Map<string, number>, weights = notabilityWeights, reuse?: NotabilityResult): NotabilityResult {
   const n = markets.length;
   const keys = Object.keys(weights) as NotabilityFeature[];
-  const raw = Object.fromEntries(keys.map((k) => [k, new Float64Array(n)])) as Record<NotabilityFeature, Float64Array>;
+  const todo = reuse ? keys.filter((k) => k === 'historical' || !reuse.pct[k] || reuse.pct[k].length !== n) : keys;
+  const raw = Object.fromEntries(todo.map((k) => [k, new Float64Array(n)])) as Record<NotabilityFeature, Float64Array>;
   markets.forEach((m, i) => {
     const f = rawFeatures(m, now, momentCounts.get(m.id) ?? 0);
-    for (const k of keys) raw[k][i] = f[k];
+    for (const k of todo) raw[k][i] = f[k];
   });
-  const pct = Object.fromEntries(keys.map((k) => [k, percentiles(raw[k])])) as Record<NotabilityFeature, Float64Array>;
+  const pct = Object.fromEntries(keys.map((k) => [k, todo.includes(k) ? percentiles(raw[k]) : reuse!.pct[k]])) as Record<NotabilityFeature, Float64Array>;
   const score = new Float64Array(n);
   const wsum = keys.reduce((s, k) => s + weights[k], 0);
   for (let i = 0; i < n; i++) {

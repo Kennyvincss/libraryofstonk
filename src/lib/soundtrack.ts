@@ -51,6 +51,8 @@ class Soundtrack {
     // browsers start audio suspended until the visitor interacts
     const unlock = () => {
       if (this.ctx?.state === 'suspended' && this.holders.size) void this.ctx.resume();
+      // the score is only built once sound can actually play (see start)
+      if (!this.ctx && this.holders.size && this.enabled) this.start();
     };
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
@@ -130,6 +132,10 @@ class Soundtrack {
 
   private start() {
     if (!this.supported) return;
+    // browsers keep audio silent until the first tap; building the engine (and its
+    // reverb) before then only slows the page down, so wait for that tap
+    const activated = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive ?? true;
+    if (!this.ctx && !activated) return;
     this.init();
     const ctx = this.ctx!;
     if (ctx.state === 'suspended') void ctx.resume();

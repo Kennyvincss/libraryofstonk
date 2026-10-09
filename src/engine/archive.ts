@@ -109,7 +109,7 @@ export class Archive {
         this.momentsByMarket.set(id, arr);
       }
     }
-    this.notability = scoreMarkets(markets, this.now, counts);
+    this.notability = scoreMarkets(markets, this.now, counts, undefined, first);
     this.byRank = Array.from({ length: markets.length }, (_, i) => i).sort((a, b) => this.notability.rank[a] - this.notability.rank[b]);
     this.badges = awardBadges(markets, this.notability.rank, this.now);
 

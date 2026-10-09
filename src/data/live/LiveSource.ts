@@ -1,8 +1,9 @@
 import type { DataSource } from '../source';
-import type { ActivityEvent, Bar, EcosystemDay, Market, MarketPage, Snapshot, SourceMeta, Trade } from '../types';
+import type { ActivityEvent, Bar, EcosystemDay, Market, MarketPage, Moment, Snapshot, SourceMeta, Trade } from '../types';
 import { GECKO_API, NETWORK, parseOhlcv, parseTrades, poolToRecord, tokenMap, type GtList, type GtPool, type Ohlcv } from './gecko';
 import { CRYPTO_QUOTE_SPECS, EXCLUDED_MINTS } from './quotes';
 import { STONKFUN, isStonkFunPool } from './stonkfun';
+import { cachedJson } from './cache';
 
 const CRYPTO = { quotes: new Map(CRYPTO_QUOTE_SPECS.map((c) => [c.mint!, { symbol: c.symbol, mint: c.mint! }])), dexIds: STONKFUN.dexIds };
 
@@ -24,6 +25,8 @@ export class LiveSource implements DataSource {
   private readonly gecko: string;
   private metaP?: Promise<SourceMeta>;
   private marketsP?: Promise<Market[]>;
+  private ecoP?: Promise<EcosystemDay[]>;
+  private momentsP?: Promise<Moment[] | undefined>;
   private activityP?: Promise<{ a: Activity; prefix: Map<string, Float64Array> }>;
   private byId = new Map<string, Market>();
   private seriesCache = new Map<string, Promise<Bar[]>>();
@@ -31,12 +34,22 @@ export class LiveSource implements DataSource {
   constructor(opts: { dataUrl: string; geckoApi?: string }) {
     this.base = opts.dataUrl.replace(/\/$/, '');
     this.gecko = (opts.geckoApi || GECKO_API).replace(/\/$/, '');
+    // start every core download at once, before the app asks for them one by one
+    void this.meta().catch(() => {});
+    void this.markets().catch(() => {});
+    void this.ecosystem().catch(() => {});
+    void this.moments();
   }
 
   private async json<T>(path: string): Promise<T> {
     const res = await fetch(`${this.base}/${path}`, { cache: 'no-cache' });
     if (!res.ok) throw new Error(`Archive dataset unavailable (${res.status} on ${path})`);
     return (await res.json()) as T;
+  }
+
+  /** the core files: cached between visits (stale-while-revalidate) */
+  private core<T>(path: string): Promise<T> {
+    return cachedJson<T>(`${this.base}/${path}`);
   }
 
   private async gt<T>(path: string): Promise<T | null> {
@@ -49,12 +62,12 @@ export class LiveSource implements DataSource {
   }
 
   meta(): Promise<SourceMeta> {
-    this.metaP ??= this.json<SourceMeta>('meta.json').then((m) => ({ ...m, kind: 'api' as const, isDemo: false }));
+    this.metaP ??= this.core<SourceMeta>('meta.json').then((m) => ({ ...m, kind: 'api' as const, isDemo: false }));
     return this.metaP;
   }
 
   private markets(): Promise<Market[]> {
-    this.marketsP ??= this.json<Market[]>('markets.json').then((ms) => {
+    this.marketsP ??= this.core<Market[]>('markets.json').then((ms) => {
       for (const m of ms) this.byId.set(m.id, m);
       return ms;
     });
@@ -102,11 +115,12 @@ export class LiveSource implements DataSource {
   }
 
   ecosystem(): Promise<EcosystemDay[]> {
-    return this.json<EcosystemDay[]>('ecosystem.json');
+    this.ecoP ??= this.core<EcosystemDay[]>('ecosystem.json');
+    return this.ecoP;
   }
 
   async snapshot(at: number): Promise<Snapshot> {
-    this.activityP ??= this.json<Activity>('activity.json').then((a) => {
+    this.activityP ??= this.core<Activity>('activity.json').then((a) => {
       // prefix sums per market for O(1) trailing-7-day windows
       const prefix = new Map<string, Float64Array>();
       for (const [id, row] of Object.entries(a.rows)) {
@@ -136,8 +150,10 @@ export class LiveSource implements DataSource {
     return { at, activity };
   }
 
-  async moments() {
-    return undefined; // detected by the engine from real data
+  /** moments precomputed by the indexer (same engine); undefined → detected in the browser */
+  moments(): Promise<Moment[] | undefined> {
+    this.momentsP ??= this.core<Moment[]>('moments.json').catch(() => undefined);
+    return this.momentsP;
   }
 
   /**
